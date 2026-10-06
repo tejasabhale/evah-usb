@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Default Design Tokens - EVAH Default */
+  --evah-bg: #0b0f19;
+  --evah-surface: rgba(18, 24, 38, 0.78);
+  --evah-surface-subtle: rgba(255, 255, 255, 0.05);
+  --evah-surface-hover: rgba(255, 255, 255, 0.08);
+  --evah-text: #f3f4f6;
+  --evah-text-secondary: #9ca3af;
+  --evah-text-muted: #6b7280;
+  --evah-border: rgba(255, 255, 255, 0.10);
+  --evah-border-strong: rgba(255, 255, 255, 0.20);
+  --evah-accent: #14b8a6;
+  --evah-accent-hover: #0d9488;
+  --evah-accent-subtle: rgba(20, 184, 166, 0.15);
+  --evah-danger: #ef4444;
+  --evah-danger-subtle: rgba(239, 68, 68, 0.15);
+  --evah-warning: #f59e0b;
+  --evah-success: #10b981;
+  
+  --evah-dock-bg: rgba(15, 23, 42, 0.72);
+  --evah-topbar-bg: rgba(11, 15, 25, 0.82);
+  --evah-window-radius: 14px;
+  --evah-dock-radius: 22px;
+  
+  --evah-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --evah-font-mono: 'JetBrains Mono', monospace;
+  
+  --evah-blur-amount: 24px;
+  --evah-shadow-opacity: 0.35;
+  --evah-window-opacity: 0.88;
+  
+  /* Text Scale */
+  --evah-text-scale: 1;
+  --evah-font-size-base: 14px;
+  
+  /* UI Density multiplier: compact=0.8, comfortable=1.0, spacious=1.2 */
+  --evah-density-gap: 8px;
+  --evah-density-padding: 12px;
+  --evah-density-row-height: 36px;
+}
+
+/* Light Mode Overrides when active */
+.evah-theme-light {
+  --evah-bg: #f5f6f8;
+  --evah-surface: rgba(255, 255, 255, 0.85);
+  --evah-surface-subtle: rgba(0, 0, 0, 0.04);
+  --evah-surface-hover: rgba(0, 0, 0, 0.06);
+  --evah-text: #111827;
+  --evah-text-secondary: #4b5563;
+  --evah-text-muted: #9ca3af;
+  --evah-border: rgba(0, 0, 0, 0.09);
+  --evah-border-strong: rgba(0, 0, 0, 0.18);
+  --evah-dock-bg: rgba(255, 255, 255, 0.82);
+  --evah-topbar-bg: rgba(245, 246, 248, 0.85);
+  --evah-shadow-opacity: 0.15;
+}
+
+* {
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Text selections are allowed inside inputs, textareas, code blocks */
+input, textarea, [contenteditable="true"], .allow-select {
+  user-select: text;
+  -webkit-user-drag: auto;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--evah-bg);
+  color: var(--evah-text);
+  font-family: var(--evah-font-sans);
+  font-size: calc(var(--evah-font-size-base) * var(--evah-text-scale));
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* Responsive transitions */
+.transition-glass {
+  transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              backdrop-filter 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}

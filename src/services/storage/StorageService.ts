@@ -1,0 +1,33 @@
+import { IStorageAdapter } from './IStorageAdapter';
+import { BrowserStorageAdapter } from './BrowserStorageAdapter';
+import { NativeUSBStorageAdapter } from './NativeUSBStorageAdapter';
+
+class StorageServiceImpl {
+  private adapter: IStorageAdapter;
+
+  constructor() {
+    // Detect if running inside Tauri environment
+    const isTauri = typeof window !== 'undefined' && 
+      (Boolean(window.__TAURI__) || Boolean(window.__TAURI_INTERNALS__));
+    
+    if (isTauri) {
+      this.adapter = new NativeUSBStorageAdapter();
+    } else {
+      this.adapter = new BrowserStorageAdapter();
+    }
+  }
+
+  public getAdapter(): IStorageAdapter {
+    return this.adapter;
+  }
+
+  public isNative(): boolean {
+    return this.adapter.isNative;
+  }
+
+  public async initialize(basePath?: string): Promise<boolean> {
+    return this.adapter.initialize(basePath);
+  }
+}
+
+export const StorageService = new StorageServiceImpl();
