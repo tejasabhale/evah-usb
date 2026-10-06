@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { 
   Folder, Globe, Shield, Settings, Palette, Terminal, FileText, Info, 
-  FolderPlus, FilePlus, RefreshCw, Lock, Sparkles, Monitor 
+  FolderPlus, FilePlus, RefreshCw, Lock, Sparkles, Monitor, XSquare
 } from 'lucide-react';
 import { AppId } from '@/types/window';
 import { useWindowStore } from '@/stores/useWindowStore';
@@ -65,7 +65,7 @@ const DESKTOP_SHORTCUTS: DesktopIcon[] = [
 
 export const Desktop: React.FC = () => {
   const desktopWallpaper = useThemeStore((s) => s.desktopWallpaper);
-  const openWindow = useWindowStore((s) => s.openWindow);
+  const { openWindow, closeAllWindows, windows } = useWindowStore();
   const lock = useSessionStore((s) => s.lock);
   const pushNotification = useNotificationStore((s) => s.pushNotification);
 
@@ -226,6 +226,30 @@ export const Desktop: React.FC = () => {
             <Monitor className="w-3.5 h-3.5 text-slate-300" />
             <span>Display Settings</span>
           </button>
+
+          {windows.length > 0 && (
+            <>
+              <div className="my-1 border-t border-evah-border" />
+              <button
+                onClick={() => {
+                  closeContextMenu();
+                  closeAllWindows();
+                  pushNotification({
+                    title: 'Windows Closed',
+                    message: 'All open applications closed safely.',
+                    type: 'info',
+                  });
+                }}
+                className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left hover:bg-rose-500/20 text-rose-300 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <XSquare className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Close All Windows</span>
+                </div>
+                <span className="text-[10px] text-rose-400/70 font-mono">({windows.length})</span>
+              </button>
+            </>
+          )}
 
           <div className="my-1 border-t border-evah-border" />
 

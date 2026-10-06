@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Palette, Sliders, Type, Layout, Monitor, Sparkles, Download, 
   Upload, RotateCcw, Check, Sun, Moon, Image as ImageIcon, SlidersHorizontal, 
-  Eye, AlertTriangle, Accessibility, Shield 
+  Eye, AlertTriangle, Accessibility, Shield, Plus, HardDrive, Trash2, CheckCircle2, Laptop
 } from 'lucide-react';
 import { useThemeStore } from '@/stores/useThemeStore';
 import { ThemeTokens, WallpaperConfig } from '@/types/theme';
@@ -17,19 +17,25 @@ export const ThemeStudioApp: React.FC = () => {
     activePresetId,
     presets,
     desktopWallpaper,
+    loginWallpaper,
     availableWallpapers,
     syncLoginWallpaper,
     setPreset,
     updateTokens,
     resetDefaults,
     setDesktopWallpaper,
+    setLoginWallpaper,
+    setBothWallpapers,
     setSyncLoginWallpaper,
+    importWallpaperFromHost,
+    deleteCustomWallpaper,
     updateWallpaperAdjustments,
     exportTheme,
     importTheme,
   } = useThemeStore();
 
   const [activeTab, setActiveTab] = useState<'presets' | 'colors' | 'typography' | 'layout' | 'wallpaper' | 'editor' | 'accessibility'>('presets');
+  const [selectedWallpaper, setSelectedWallpaper] = useState<WallpaperConfig>(desktopWallpaper);
   const [editingWallpaper, setEditingWallpaper] = useState<WallpaperConfig>(desktopWallpaper);
   const pushNotification = useNotificationStore((s) => s.pushNotification);
 
@@ -408,33 +414,232 @@ export const ThemeStudioApp: React.FC = () => {
 
         {/* Tab 5: Wallpapers */}
         {activeTab === 'wallpaper' && (
-          <div className="space-y-5 max-w-2xl">
-            <div>
-              <h3 className="text-base font-bold text-white">Wallpapers</h3>
-              <p className="text-xs text-evah-text-secondary mt-0.5">
-                Select from built-in high-resolution backgrounds.
-              </p>
+          <div className="space-y-6 max-w-3xl pb-6">
+            {/* Header with Title and Import Action */}
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-white">Wallpapers & Backgrounds</h3>
+                <p className="text-xs text-evah-text-secondary mt-0.5">
+                  Select wallpapers or import images from the host computer to store directly on your EVAH USB.
+                </p>
+              </div>
+
+              {/* Host File Import Trigger */}
+              <div>
+                <label className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-evah-accent text-slate-950 font-semibold text-xs hover:bg-evah-accent-hover active:scale-95 transition-all shadow-sm cursor-pointer select-none">
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  <span>Import from Computer</span>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      pushNotification({
+                        title: 'Importing Image',
+                        message: 'Copying image into EVAH USB storage...',
+                        type: 'info',
+                      });
+                      const res = await importWallpaperFromHost(file);
+                      if (res.success && res.wallpaper) {
+                        setSelectedWallpaper(res.wallpaper);
+                        pushNotification({
+                          title: 'Wallpaper Imported to USB',
+                          message: `${res.wallpaper.name} saved to /EVAH/data/wallpapers/`,
+                          type: 'success',
+                        });
+                      } else {
+                        pushNotification({
+                          title: 'Import Failed',
+                          message: res.message || 'Could not copy wallpaper',
+                          type: 'error',
+                        });
+                      }
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              {availableWallpapers.map((wp) => (
+            {/* Selected Wallpaper Inspector & Actions */}
+            {selectedWallpaper && (
+              <div className="p-4 rounded-2xl bg-white/[0.04] border border-evah-border flex flex-col sm:flex-row gap-4 items-start">
                 <div
-                  key={wp.id}
-                  onClick={() => setDesktopWallpaper(wp)}
-                  className={`group relative rounded-2xl overflow-hidden border cursor-pointer aspect-video transition-all ${
-                    desktopWallpaper.id === wp.id
-                      ? 'border-evah-accent ring-2 ring-evah-accent'
-                      : 'border-evah-border hover:border-white/40'
-                  }`}
-                >
-                  <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url("${wp.url}")` }} />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-2.5">
-                    <span className="text-[11px] font-semibold text-white truncate drop-shadow">
-                      {wp.name}
+                  className="w-full sm:w-48 aspect-video rounded-xl overflow-hidden border border-white/20 bg-cover bg-center shrink-0 shadow-md"
+                  style={{ backgroundImage: `url("${selectedWallpaper.url}")` }}
+                />
+
+                <div className="flex-1 min-w-0 space-y-2 w-full">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-sm font-bold text-white truncate">{selectedWallpaper.name}</h4>
+                    {selectedWallpaper.source === 'imported' && (
+                      <button
+                        onClick={async () => {
+                          if (window.confirm(`Delete "${selectedWallpaper.name}" from your EVAH USB drive?`)) {
+                            await deleteCustomWallpaper(selectedWallpaper.id);
+                            setSelectedWallpaper(desktopWallpaper);
+                            pushNotification({
+                              title: 'Wallpaper Removed',
+                              message: 'Deleted from /EVAH/data/wallpapers/',
+                              type: 'info',
+                            });
+                          }
+                        }}
+                        className="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 p-1 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                        title="Delete from USB"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Badges */}
+                  <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-medium bg-white/[0.06] text-slate-300 border border-white/10">
+                      {selectedWallpaper.source === 'imported' ? (
+                        <>
+                          <Laptop className="w-3 h-3 text-sky-400" />
+                          <span>Source: Imported from Computer</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3 h-3 text-purple-400" />
+                          <span>Source: System Preset</span>
+                        </>
+                      )}
                     </span>
+
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                      <HardDrive className="w-3 h-3 text-emerald-400" />
+                      <span>Stored on: EVAH USB</span>
+                    </span>
+
+                    {desktopWallpaper.id === selectedWallpaper.id && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-evah-accent/20 text-evah-accent border border-evah-accent/30">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>Current Desktop</span>
+                      </span>
+                    )}
+
+                    {loginWallpaper.id === selectedWallpaper.id && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>Current Login</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Actions to Set Wallpaper */}
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    <button
+                      onClick={async () => {
+                        await setDesktopWallpaper(selectedWallpaper);
+                        pushNotification({
+                          title: 'Desktop Wallpaper Set',
+                          message: `Applied ${selectedWallpaper.name}`,
+                          type: 'success',
+                        });
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-medium transition-colors cursor-pointer"
+                    >
+                      Set as Desktop
+                    </button>
+
+                    <button
+                      onClick={async () => {
+                        await setLoginWallpaper(selectedWallpaper);
+                        pushNotification({
+                          title: 'Login Wallpaper Set',
+                          message: `Applied ${selectedWallpaper.name} to Login Screen`,
+                          type: 'success',
+                        });
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-medium transition-colors cursor-pointer"
+                    >
+                      Set as Login Screen
+                    </button>
+
+                    <button
+                      onClick={async () => {
+                        await setBothWallpapers(selectedWallpaper);
+                        pushNotification({
+                          title: 'Applied to Both',
+                          message: `${selectedWallpaper.name} set for Desktop and Login`,
+                          type: 'success',
+                        });
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-evah-accent/20 border border-evah-accent/30 text-evah-accent hover:bg-evah-accent/30 text-xs font-semibold transition-colors cursor-pointer"
+                    >
+                      Set as Both (Desktop & Login)
+                    </button>
                   </div>
                 </div>
-              ))}
+              </div>
+            )}
+
+            {/* Imported Wallpapers Section (if any) */}
+            {availableWallpapers.filter((w) => w.source === 'imported').length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-evah-text-muted">
+                  <Laptop className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Imported from Host Computer ({availableWallpapers.filter((w) => w.source === 'imported').length})</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {availableWallpapers
+                    .filter((w) => w.source === 'imported')
+                    .map((wp) => (
+                      <div
+                        key={wp.id}
+                        onClick={() => setSelectedWallpaper(wp)}
+                        className={`group relative rounded-2xl overflow-hidden border cursor-pointer aspect-video transition-all ${
+                          selectedWallpaper?.id === wp.id
+                            ? 'border-evah-accent ring-2 ring-evah-accent'
+                            : 'border-evah-border hover:border-white/40'
+                        }`}
+                      >
+                        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url("${wp.url}")` }} />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-2.5">
+                          <span className="text-[11px] font-semibold text-white truncate drop-shadow">
+                            {wp.name}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* System Presets Section */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-evah-text-muted">
+                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                <span>Built-In Presets ({availableWallpapers.filter((w) => w.source !== 'imported').length})</span>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {availableWallpapers
+                  .filter((w) => w.source !== 'imported')
+                  .map((wp) => (
+                    <div
+                      key={wp.id}
+                      onClick={() => setSelectedWallpaper(wp)}
+                      className={`group relative rounded-2xl overflow-hidden border cursor-pointer aspect-video transition-all ${
+                        selectedWallpaper?.id === wp.id
+                          ? 'border-evah-accent ring-2 ring-evah-accent'
+                          : 'border-evah-border hover:border-white/40'
+                      }`}
+                    >
+                      <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url("${wp.url}")` }} />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-2.5">
+                        <span className="text-[11px] font-semibold text-white truncate drop-shadow">
+                          {wp.name}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
             </div>
           </div>
         )}

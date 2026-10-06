@@ -20,9 +20,12 @@ interface ThemeState {
   resetDefaults: () => Promise<void>;
   setDesktopWallpaper: (config: WallpaperConfig) => Promise<void>;
   setLoginWallpaper: (config: WallpaperConfig) => Promise<void>;
+  setBothWallpapers: (config: WallpaperConfig) => Promise<void>;
   setSyncLoginWallpaper: (sync: boolean) => void;
   updateWallpaperAdjustments: (id: string, updates: Partial<WallpaperConfig>) => Promise<void>;
   addCustomWallpaper: (name: string, dataUrl: string) => Promise<WallpaperConfig>;
+  importWallpaperFromHost: (file: File) => Promise<{ success: boolean; wallpaper?: WallpaperConfig; message?: string }>;
+  deleteCustomWallpaper: (id: string) => Promise<void>;
   exportTheme: () => string;
   importTheme: (json: string) => Promise<boolean>;
 }
@@ -134,6 +137,38 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
       desktopWallpaper: created,
     });
     return created;
+  },
+
+  importWallpaperFromHost: async (file: File) => {
+    const ws = WallpaperService.getInstance();
+    const res = await ws.importWallpaperFromHost(file);
+    if (res.success && res.wallpaper) {
+      set({
+        availableWallpapers: ws.getAvailableWallpapers(),
+        desktopWallpaper: res.wallpaper,
+      });
+    }
+    return res;
+  },
+
+  setBothWallpapers: async (config: WallpaperConfig) => {
+    const ws = WallpaperService.getInstance();
+    await ws.setBothWallpapers(config);
+    set({
+      desktopWallpaper: ws.getDesktopWallpaper(),
+      loginWallpaper: ws.getLoginWallpaper(),
+      syncLoginWallpaper: true,
+    });
+  },
+
+  deleteCustomWallpaper: async (id: string) => {
+    const ws = WallpaperService.getInstance();
+    await ws.deleteCustomWallpaper(id);
+    set({
+      desktopWallpaper: ws.getDesktopWallpaper(),
+      loginWallpaper: ws.getLoginWallpaper(),
+      availableWallpapers: ws.getAvailableWallpapers(),
+    });
   },
 
   exportTheme: () => {

@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { AppId, WindowInstance, WindowRect } from '@/types/window';
+import { VaultCryptoService } from '@/services/vault/VaultCryptoService';
+import { ClipboardService } from '@/services/clipboard/ClipboardService';
 
 interface WindowStoreState {
   windows: WindowInstance[];
@@ -10,21 +12,35 @@ interface WindowStoreState {
   closeWindow: (id: string) => void;
   minimizeWindow: (id: string) => void;
   maximizeWindow: (id: string) => void;
+  centerWindow: (id: string) => void;
+  closeAllWindows: () => void;
   focusWindow: (id: string) => void;
   updateBounds: (id: string, bounds: Partial<WindowRect>) => void;
   toggleWindow: (appId: AppId) => void;
 }
 
 const DEFAULT_WINDOW_CONFIGS: Record<AppId, { title: string; icon: string; width: number; height: number }> = {
-  files: { title: 'EVAH Files', icon: 'Folder', width: 880, height: 560 },
-  browser: { title: 'EVAH Web Browser', icon: 'Globe', width: 960, height: 600 },
-  vault: { title: 'EVAH Secure Vault', icon: 'Shield', width: 900, height: 580 },
+  files: { title: 'EVAH Files', icon: 'Folder', width: 920, height: 580 },
+  browser: { title: 'EVAH Web Browser', icon: 'Globe', width: 1040, height: 640 },
+  vault: { title: 'EVAH Secure Vault', icon: 'Shield', width: 880, height: 580 },
   settings: { title: 'Settings', icon: 'Settings', width: 860, height: 580 },
   themes: { title: 'Theme Studio & Wallpaper', icon: 'Palette', width: 940, height: 620 },
-  terminal: { title: 'EVAH Terminal', icon: 'Terminal', width: 780, height: 480 },
-  notes: { title: 'EVAH Notes', icon: 'FileText', width: 840, height: 540 },
-  about: { title: 'About EVAH', icon: 'Info', width: 560, height: 460 },
+  terminal: { title: 'EVAH Terminal', icon: 'Terminal', width: 800, height: 500 },
+  notes: { title: 'EVAH Notes', icon: 'FileText', width: 860, height: 540 },
+  about: { title: 'About EVAH', icon: 'Info', width: 580, height: 480 },
 };
+
+function getDesktopDimensions() {
+  const screenW =
+    typeof window !== 'undefined' && typeof window.innerWidth === 'number' && window.innerWidth > 0
+      ? window.innerWidth
+      : 1280;
+  const screenH =
+    typeof window !== 'undefined' && typeof window.innerHeight === 'number' && window.innerHeight > 0
+      ? window.innerHeight
+      : 800;
+  return { screenW, screenH };
+}
 
 export const useWindowStore = create<WindowStoreState>((set, get) => ({
   windows: [],
@@ -36,7 +52,7 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
     const existing = windows.find((w) => w.appId === appId);
 
     if (existing) {
-      // Restore if minimized and bring to front
+      // Single Instance Enforcement: Restore if minimized and bring to front
       const nextZ = highestZIndex + 1;
       set({
         highestZIndex: nextZ,
@@ -50,15 +66,22 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
       return;
     }
 
-    const cfg = DEFAULT_WINDOW_CONFIGS[appId] || { title: appId, icon: 'AppWindow', width: 800, height: 520 };
+    const cfg = DEFAULT_WINDOW_CONFIGS[appId] || { title: appId, icon: 'AppWindow', width: 840, height: 540 };
     const nextZ = highestZIndex + 1;
-    const offset = (windows.length % 6) * 28;
 
-    // Center on screen
-    const screenW = typeof window !== 'undefined' ? window.innerWidth : 1280;
-    const screenH = typeof window !== 'undefined' ? window.innerHeight : 800;
-    const x = Math.max(40, Math.floor((screenW - cfg.width) / 2) + offset);
-    const y = Math.max(50, Math.floor((screenH - cfg.height) / 2 - 20) + offset);
+    // Calculate actual usable desktop area: topbar 32px, dock safe margin 84px
+    const { screenW, screenH } = getDesktopDimensions();
+    const usableTop = 32;
+    const usableBottom = screenH - 84;
+    const usableH = Math.max(300, usableBottom - usableTop);
+    const usableW = screenW;
+
+    const targetW = Math.min(cfg.width, Math.max(480, usableW - 40));
+    const targetH = Math.min(cfg.height, Math.max(340, usableH - 20));
+
+    // Exactly centered in the usable desktop safe region
+    const x = Math.max(20, Math.floor((usableW - targetW) / 2));
+    const y = Math.max(usableTop + 8, usableTop + Math.floor((usableH - targetH) / 2));
 
     const newWindow: WindowInstance = {
       id: `win_${appId}_${Date.now()}`,
@@ -73,8 +96,8 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
       bounds: {
         x,
         y,
-        width: cfg.width,
-        height: cfg.height,
+        width: targetW,
+        height: targetH,
       },
       minWidth: 460,
       minHeight: 340,
@@ -119,16 +142,15 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
         windows: state.windows.map((w) => {
           if (w.id !== id) return w;
           if (w.isMaximized) {
-            // Restore
+            // Restore previous bounds
             return {
               ...w,
               isMaximized: false,
               bounds: w.prevBounds || w.bounds,
             };
           } else {
-            // Maximize
-            const screenW = typeof window !== 'undefined' ? window.innerWidth : 1280;
-            const screenH = typeof window !== 'undefined' ? window.innerHeight : 800;
+            // Maximize within usable desktop area (respects 32px topbar and 84px dock)
+            const { screenW, screenH } = getDesktopDimensions();
             return {
               ...w,
               isMaximized: true,
@@ -137,12 +159,56 @@ export const useWindowStore = create<WindowStoreState>((set, get) => ({
                 x: 0,
                 y: 32, // Below topbar
                 width: screenW,
-                height: screenH - 32 - 76, // Above dock
+                height: Math.max(300, screenH - 32 - 84), // Above dock
               },
             };
           }
         }),
       };
+    });
+  },
+
+  centerWindow: (id: string) => {
+    set((state) => {
+      const { screenW, screenH } = getDesktopDimensions();
+      const usableTop = 32;
+      const usableBottom = screenH - 84;
+      const usableH = Math.max(300, usableBottom - usableTop);
+      const usableW = screenW;
+
+      return {
+        windows: state.windows.map((w) => {
+          if (w.id !== id) return w;
+          const targetW = Math.min(w.bounds.width, Math.max(480, usableW - 40));
+          const targetH = Math.min(w.bounds.height, Math.max(340, usableH - 20));
+          const x = Math.max(20, Math.floor((usableW - targetW) / 2));
+          const y = Math.max(usableTop + 8, usableTop + Math.floor((usableH - targetH) / 2));
+          return {
+            ...w,
+            isMaximized: false,
+            bounds: {
+              x,
+              y,
+              width: targetW,
+              height: targetH,
+            },
+          };
+        }),
+      };
+    });
+  },
+
+  closeAllWindows: () => {
+    // Section 46: Handle sensitive state cleanup before closing windows
+    try {
+      VaultCryptoService.getInstance().lockVault();
+      ClipboardService.getInstance().clearImmediately();
+    } catch {
+      // ignore
+    }
+    set({
+      windows: [],
+      activeWindowId: null,
     });
   },
 

@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Settings, Shield, Volume2, Usb, Keyboard, Info, Palette, 
   Clock, Lock, Copy, RefreshCw, Check, AlertTriangle, Monitor, 
-  Eye, Sliders, Globe, HardDrive, RotateCcw, X 
+  Eye, Sliders, Globe, HardDrive, RotateCcw, X, LogOut
 } from 'lucide-react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useThemeStore } from '@/stores/useThemeStore';
@@ -10,6 +10,8 @@ import { useWindowStore } from '@/stores/useWindowStore';
 import { useShortcutStore } from '@/stores/useShortcutStore';
 import { TtsService } from '@/services/tts/TtsService';
 import { useNotificationStore } from '@/stores/useNotificationStore';
+import { StorageService } from '@/services/storage/StorageService';
+import { FileSystemStats } from '@/types/filesystem';
 import { Button } from '@/components/ui/Button';
 import { Toggle, Slider, Select } from '@/components/ui/Toggle';
 import { IconButton } from '@/components/ui/IconButton';
@@ -42,6 +44,34 @@ export const SettingsApp: React.FC = () => {
   const [rebindingId, setRebindingId] = useState<string | null>(null);
   const [recordedCombo, setRecordedCombo] = useState<string>('');
   const [conflictWarning, setConflictWarning] = useState<{ conflictName: string; key: string } | null>(null);
+  const [storageStats, setStorageStats] = useState<FileSystemStats | null>(null);
+
+  useEffect(() => {
+    if (activeSection === 'usb') {
+      StorageService.getAdapter()
+        .getStats()
+        .then(setStorageStats)
+        .catch(() => {});
+    }
+  }, [activeSection]);
+
+  const handleSafeEject = () => {
+    if (window.confirm('Safely eject EVAH USB drive? Active windows will close and the session will be locked.')) {
+      pushNotification({
+        title: 'Safe Eject Initiated',
+        message: 'Flushing pending writes and clearing memory keys...',
+        type: 'info',
+      });
+      useWindowStore.getState().closeAllWindows();
+      useSessionStore.getState().lock('Device Safely Ejected');
+      useSessionStore.getState().simulateUsbUnplug();
+      pushNotification({
+        title: 'Safe to Remove Hardware',
+        message: 'EVAH device unmounted. You may now unplug the drive.',
+        type: 'success',
+      });
+    }
+  };
 
   const testVoiceGreeting = () => {
     TtsService.getInstance().playWelcomeGreeting(settings.welcomeVoiceVolume);
@@ -462,6 +492,57 @@ export const SettingsApp: React.FC = () => {
               <div className="flex justify-between">
                 <span className="text-evah-text-muted">Serial Hash:</span>
                 <span className="text-white">{device?.serialNumber || 'EV-8842-SEC-99'}</span>
+              </div>
+            </div>
+
+            {/* Storage Capacity Telemetry (Section 67) */}
+            {storageStats && (
+              <div className="p-4 rounded-2xl border border-evah-border bg-white/[0.02] space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2 font-medium text-white">
+                    <HardDrive className="w-4 h-4 text-emerald-400" />
+                    <span>USB Storage Capacity</span>
+                  </div>
+                  <span className="text-evah-text-muted font-mono text-[11px]">
+                    {(storageStats.totalSizeBytes / (1024 * 1024)).toFixed(1)} MB used / {((storageStats.totalSizeBytes + storageStats.freeSizeBytes) / (1024 * 1024 * 1024)).toFixed(1)} GB
+                  </span>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-400 rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min(100, Math.max(1, (storageStats.totalSizeBytes / Math.max(1, storageStats.totalSizeBytes + storageStats.freeSizeBytes)) * 100))}%`,
+                    }}
+                  />
+                </div>
+
+                <div className="flex justify-between text-[11px] text-evah-text-secondary pt-0.5 font-mono">
+                  <span>Files: {storageStats.totalFiles}</span>
+                  <span>Folders: {storageStats.totalDirectories}</span>
+                  <span className="text-emerald-400">Free: {(storageStats.freeSizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB</span>
+                </div>
+              </div>
+            )}
+
+            {/* Safe Eject Action (Section 68) */}
+            <div className="p-4 rounded-2xl border border-rose-500/30 bg-rose-950/15 space-y-2">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h4 className="text-xs font-semibold text-rose-300">Safe Device Ejection</h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Flush write buffers, lock cryptographic vault, and safely unmount the EVAH drive.
+                  </p>
+                </div>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  icon={<LogOut className="w-3.5 h-3.5" />}
+                  onClick={handleSafeEject}
+                >
+                  Eject Drive
+                </Button>
               </div>
             </div>
 

@@ -33,6 +33,8 @@ if (typeof window === 'undefined') {
       },
       btoa: globalThis.btoa || btoaPolyfill,
       atob: globalThis.atob || atobPolyfill,
+      innerWidth: 1280,
+      innerHeight: 800,
       addEventListener: () => {},
       removeEventListener: () => {},
       dispatchEvent: () => true,
@@ -58,5 +60,33 @@ if (typeof window === 'undefined') {
   }
   if (!globalThis.atob) {
     globalThis.atob = atobPolyfill;
+  }
+
+  if (typeof (globalThis as any).FileReader === 'undefined') {
+    class MockFileReader {
+      onload: ((e?: any) => void) | null = null;
+      onerror: ((e?: any) => void) | null = null;
+      result: string | ArrayBuffer | null = null;
+
+      readAsDataURL(blob: Blob) {
+        if (typeof blob.arrayBuffer === 'function') {
+          blob
+            .arrayBuffer()
+            .then((buffer) => {
+              const base64 = Buffer.from(buffer).toString('base64');
+              const type = blob.type || 'image/jpeg';
+              this.result = `data:${type};base64,${base64}`;
+              if (this.onload) this.onload({ target: this });
+            })
+            .catch((err) => {
+              if (this.onerror) this.onerror(err);
+            });
+        } else {
+          this.result = 'data:image/jpeg;base64,bW9ja2RhdGE=';
+          if (this.onload) this.onload({ target: this });
+        }
+      }
+    }
+    (globalThis as any).FileReader = MockFileReader;
   }
 }

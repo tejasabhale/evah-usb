@@ -154,9 +154,26 @@ export class WallpaperService {
         if (saved.syncLoginWithDesktop !== undefined) {
           this.syncLoginWithDesktop = saved.syncLoginWithDesktop;
         }
+
+        // Section 33: Verify referenced wallpaper exists on USB, else fallback safely
+        if (this.currentDesktop.storedPath) {
+          const exists = await storage.exists(this.currentDesktop.storedPath);
+          if (!exists) {
+            console.warn(`Wallpaper file ${this.currentDesktop.storedPath} not found on USB. Reverting to default.`);
+            this.currentDesktop = { ...BUILTIN_WALLPAPERS[0] };
+          }
+        }
+        if (this.currentLogin.storedPath) {
+          const exists = await storage.exists(this.currentLogin.storedPath);
+          if (!exists) {
+            this.currentLogin = { ...BUILTIN_WALLPAPERS[0] };
+          }
+        }
       }
     } catch (e) {
       console.warn('Could not read wallpaper settings, using default', e);
+      this.currentDesktop = { ...BUILTIN_WALLPAPERS[0] };
+      this.currentLogin = { ...BUILTIN_WALLPAPERS[0] };
     }
   }
 
@@ -198,11 +215,141 @@ export class WallpaperService {
     await this.persist();
   }
 
+  public async setBothWallpapers(config: WallpaperConfig): Promise<void> {
+    this.currentDesktop = config;
+    this.currentLogin = { ...config };
+    this.syncLoginWithDesktop = true;
+    await this.persist();
+  }
+
+  /**
+   * Section 24-30: Imports host computer image, validates, copies into EVAH USB (/EVAH/data/wallpapers/),
+   * and saves metadata without leaking personal host file paths.
+   */
+  public async importWallpaperFromHost(file: File): Promise<{ success: boolean; wallpaper?: WallpaperConfig; message?: string }> {
+    // 1. Validation: Allowed formats
+    const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    if (!allowedExtensions.includes(ext)) {
+      return {
+        success: false,
+        message: `Unsupported file format (.${ext}). Supported: JPG, PNG, WEBP, GIF.`,
+      };
+    }
+
+    // 2. Validation: Maximum 20MB
+    const MAX_SIZE_BYTES = 20 * 1024 * 1024;
+    if (file.size > MAX_SIZE_BYTES) {
+      return {
+        success: false,
+        message: 'Wallpaper file size exceeds 20MB limit.',
+      };
+    }
+
+    // 3. Duplicate check by clean name
+    const rawBaseName = file.name.replace(/\.[^/.]+$/, '').trim();
+    const existing = this.customWallpapers.find(
+      (w) => w.name.toLowerCase() === rawBaseName.toLowerCase()
+    );
+    if (existing) {
+      return {
+        success: true,
+        wallpaper: existing,
+        message: 'Existing copy found on EVAH USB.',
+      };
+    }
+
+    // 4. Sanitize filename (Section 27 & 65: No host paths)
+    const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const randSuffix = Math.random().toString(36).substring(2, 6);
+    const sanitizedFilename = `${timestamp}-${randSuffix}-${cleanName}`;
+    const targetUsbPath = `/EVAH/data/wallpapers/${sanitizedFilename}`;
+
+    try {
+      // 5. Read file as Base64 Data URL
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Failed reading file from host'));
+        reader.readAsDataURL(file);
+      });
+
+      // 6. Write image copy to EVAH USB
+      const storage = StorageService.getAdapter();
+      await storage.writeFile(targetUsbPath, dataUrl);
+
+      // 7. Create clean WallpaperConfig metadata
+      const newWallpaper: WallpaperConfig = {
+        id: `wp_host_${Date.now()}_${randSuffix}`,
+        name: rawBaseName,
+        type: 'custom',
+        source: 'imported',
+        filename: sanitizedFilename,
+        storedPath: targetUsbPath,
+        url: dataUrl,
+        createdAt: new Date().toISOString(),
+        fileSizeBytes: file.size,
+        fit: 'cover',
+        brightness: 100,
+        contrast: 100,
+        blur: 0,
+        saturation: 100,
+        grayscale: 0,
+        overlayColor: '#000000',
+        overlayOpacity: 0.15,
+        zoom: 1,
+      };
+
+      this.customWallpapers.push(newWallpaper);
+      await this.persist();
+
+      return {
+        success: true,
+        wallpaper: newWallpaper,
+      };
+    } catch (err: any) {
+      console.error('Failed importing wallpaper to USB:', err);
+      return {
+        success: false,
+        message: err.message || 'Failed saving wallpaper to USB',
+      };
+    }
+  }
+
+  public async deleteCustomWallpaper(id: string): Promise<void> {
+    const target = this.customWallpapers.find((w) => w.id === id);
+    if (!target) return;
+
+    this.customWallpapers = this.customWallpapers.filter((w) => w.id !== id);
+
+    // If active was this wallpaper, revert to default
+    if (this.currentDesktop.id === id) {
+      this.currentDesktop = { ...BUILTIN_WALLPAPERS[0] };
+    }
+    if (this.currentLogin.id === id) {
+      this.currentLogin = { ...BUILTIN_WALLPAPERS[0] };
+    }
+
+    // Try deleting physical file on USB
+    if (target.storedPath) {
+      try {
+        const storage = StorageService.getAdapter();
+        await storage.deleteFile(target.storedPath);
+      } catch {
+        // ignore
+      }
+    }
+
+    await this.persist();
+  }
+
   public async addCustomWallpaper(name: string, dataUrl: string): Promise<WallpaperConfig> {
     const config: WallpaperConfig = {
       id: 'custom_' + Date.now(),
       name,
       type: 'custom',
+      source: 'imported',
       url: dataUrl,
       fit: 'cover',
       brightness: 100,
@@ -230,7 +377,7 @@ export class WallpaperService {
       this.currentLogin = { ...this.currentLogin, ...updates };
     }
 
-    const idx = this.customWallpapers.findIndex(w => w.id === id);
+    const idx = this.customWallpapers.findIndex((w) => w.id === id);
     if (idx !== -1) {
       this.customWallpapers[idx] = { ...this.customWallpapers[idx], ...updates };
     }

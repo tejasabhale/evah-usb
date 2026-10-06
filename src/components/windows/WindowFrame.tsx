@@ -11,7 +11,7 @@ interface WindowFrameProps {
 }
 
 export const WindowFrame: React.FC<WindowFrameProps> = ({ window: win, children }) => {
-  const { focusWindow, closeWindow, minimizeWindow, maximizeWindow, updateBounds } = useWindowStore();
+  const { focusWindow, closeWindow, minimizeWindow, maximizeWindow, centerWindow, updateBounds } = useWindowStore();
   const tokens = useThemeStore((s) => s.tokens);
 
   const [isDragging, setIsDragging] = useState(false);
@@ -157,6 +157,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ window: win, children 
         onMinimize={() => minimizeWindow(win.id)}
         onMaximize={() => maximizeWindow(win.id)}
         onClose={() => closeWindow(win.id)}
+        onCenter={() => centerWindow(win.id)}
       />
 
       {/* Window Body Container */}

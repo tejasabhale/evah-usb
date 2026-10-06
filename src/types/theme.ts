@@ -53,4 +53,9 @@ export interface WallpaperConfig {
   overlayColor: string; // hex
   overlayOpacity: number; // 0 to 0.8, default 0.2
   zoom: number; // 1 to 2
+  source?: 'builtin' | 'imported';
+  filename?: string;
+  storedPath?: string;
+  createdAt?: string;
+  fileSizeBytes?: number;
 }

@@ -5,6 +5,7 @@ import { SessionManager } from '@/services/session/SessionManager';
 import { AuthService } from '@/services/auth/AuthService';
 import { UsbService } from '@/services/usb/UsbService';
 import { useNotificationStore } from './useNotificationStore';
+import { useThemeStore } from './useThemeStore';
 
 interface SessionState {
   lifecycle: SessionLifecycle;
@@ -94,9 +95,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       set({
         user: AuthService.getInstance().getCurrentUser(),
       });
+      // Re-hydrate theme and wallpaper from USB on unlock/reconnect
+      await useThemeStore.getState().initialize();
       useNotificationStore.getState().pushNotification({
         title: 'EVAH Unlocked',
-        message: 'Welcome back. Environment loaded.',
+        message: 'Welcome back. Environment restored.',
         type: 'success',
       });
     }
