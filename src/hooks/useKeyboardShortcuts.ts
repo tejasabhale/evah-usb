@@ -1,65 +1,80 @@
 import { useEffect } from 'react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useWindowStore } from '@/stores/useWindowStore';
+import { ShortcutRegistry } from '@/services/shortcuts/ShortcutRegistry';
 
 export function useKeyboardShortcuts() {
   const lifecycle = useSessionStore((s) => s.lifecycle);
   const panicLock = useSessionStore((s) => s.panicLock);
+  const lock = useSessionStore((s) => s.lock);
   const openWindow = useWindowStore((s) => s.openWindow);
   const closeWindow = useWindowStore((s) => s.closeWindow);
   const activeWindowId = useWindowStore((s) => s.activeWindowId);
 
   useEffect(() => {
+    const registry = ShortcutRegistry.getInstance();
+    registry.initialize();
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Emergency Panic Lock shortcut (Ctrl + Shift + L) - active across any state
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === 'KeyL') {
+      // Emergency Panic Lock shortcut - active across any state
+      if (registry.matchesEvent('panic_lock', e)) {
         e.preventDefault();
         panicLock();
         return;
       }
 
-      // App launching shortcuts only in active session
+      // App launching & window shortcuts only in active session
       if (lifecycle !== 'ACTIVE_SESSION') return;
 
-      // Terminal: Ctrl + Alt + T
-      if ((e.ctrlKey || e.metaKey) && e.altKey && e.code === 'KeyT') {
+      if (registry.matchesEvent('lock_session', e)) {
+        e.preventDefault();
+        lock('Keyboard Shortcut Trigger');
+        return;
+      }
+
+      if (registry.matchesEvent('open_terminal', e)) {
         e.preventDefault();
         openWindow('terminal');
         return;
       }
 
-      // Files: Ctrl + Shift + F
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === 'KeyF') {
+      if (registry.matchesEvent('open_files', e)) {
         e.preventDefault();
         openWindow('files');
         return;
       }
 
-      // Browser: Ctrl + Shift + B
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === 'KeyB') {
+      if (registry.matchesEvent('open_browser', e)) {
         e.preventDefault();
         openWindow('browser');
         return;
       }
 
-      // Vault: Ctrl + Shift + V
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === 'KeyV') {
+      if (registry.matchesEvent('open_vault', e)) {
         e.preventDefault();
         openWindow('vault');
         return;
       }
 
-      // Esc: Close active window if not focused in input
-      if (e.key === 'Escape') {
+      if (registry.matchesEvent('open_notes', e)) {
+        e.preventDefault();
+        openWindow('notes');
+        return;
+      }
+
+      // Close active window shortcut (e.g. Ctrl+W or Esc)
+      if (registry.matchesEvent('close_window', e) || e.key === 'Escape') {
         const target = e.target as HTMLElement;
         const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA');
         if (!isInput && activeWindowId) {
-          // Esc cancels/closes
+          e.preventDefault();
+          closeWindow(activeWindowId);
+          return;
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [lifecycle, panicLock, openWindow, closeWindow, activeWindowId]);
+  }, [lifecycle, panicLock, lock, openWindow, closeWindow, activeWindowId]);
 }

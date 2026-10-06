@@ -119,10 +119,11 @@ export class TtsService {
   }
 
   public async playWelcomeGreeting(volume: number = 0.9): Promise<void> {
-    return this.speak('Welcome to EVAH.', { volume, rate: 1.0, pitch: 1.05 });
+    // Phonetic representation guarantees correct 'EE-VHA' / 'IVHA' pronunciation across TTS engines
+    return this.speak('Welcome to Ee-vha.', { volume, rate: 0.95, pitch: 1.05 });
   }
 
   public async testVoice(volume: number = 0.9): Promise<void> {
-    return this.speak('EVAH speech synthesis initialized successfully.', { volume });
+    return this.speak('Ee-vha speech synthesis active and ready.', { volume, rate: 0.95, pitch: 1.05 });
   }
 }

@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Terminal, Shield, Usb, Cpu } from 'lucide-react';
+import { Terminal as TerminalIcon, Copy, Trash2, Shield, Usb, Cpu } from 'lucide-react';
 import { StorageService } from '@/services/storage/StorageService';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useThemeStore } from '@/stores/useThemeStore';
 import { useVaultStore } from '@/stores/useVaultStore';
+import { IconButton } from '@/components/ui/IconButton';
 
 interface HistoryItem {
   command: string;
@@ -15,7 +16,7 @@ export const TerminalApp: React.FC = () => {
   const [history, setHistory] = useState<HistoryItem[]>([
     {
       command: '',
-      output: 'EVAH OS Shell v1.0.0 (x86_64-evah-usb)\nType "help" for a list of available commands.\n',
+      output: 'EVAH OS Shell v1.0.0 (x86_64-evah-usb)\nType "help" for a list of available system commands.\n',
     },
   ]);
   const [inputVal, setInputVal] = useState('');
@@ -33,7 +34,7 @@ export const TerminalApp: React.FC = () => {
   const activePresetId = useThemeStore((s) => s.activePresetId);
   const isVaultUnlocked = useVaultStore((s) => s.isUnlocked);
 
-  const username = user?.username || 'tejas';
+  const username = user?.username ? user.username.toLowerCase() : 'tejas';
 
   useEffect(() => {
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -61,23 +62,26 @@ export const TerminalApp: React.FC = () => {
     try {
       switch (cmd) {
         case 'help':
-          output = `Available EVAH commands:
-  help              - Show this manual
+          output = `EVAH Core Utilities (Controlled Execution Environment):
+  help              - Display this command manual
   ls [path]         - List files and directories
   cd <path>         - Change current working directory
   pwd               - Print working directory
-  cat <file>        - Print file content
+  cat <file>        - Display text file contents
   mkdir <dir>       - Create a new directory
   touch <file>      - Create a new empty file
-  rm <path>         - Delete file or directory
-  usb               - Display EVAH USB device telemetry
-  vault             - Check AES-256 vault status
-  theme             - Show active theme design tokens
-  whoami            - Display active user profile
-  date              - Display system clock
+  rm <path>         - Delete a file or directory
+  echo <text>       - Print text arguments
+  whoami            - Display active authenticated profile
+  date              - Display system clock (UTC)
+  df                - Display storage partition allocation
+  ps                - Display simulated active process table
+  usb               - Telemetry & presence state of hardware USB
+  vault             - Check AES-256-GCM vault security status
+  theme             - Show current theme preset & injected variables
   lock              - Lock EVAH session
-  panic             - Trigger emergency panic lock
-  clear             - Clear terminal screen`;
+  panic             - Emergency lockdown: purge active memory keys
+  clear             - Clear terminal display buffer`;
           break;
 
         case 'clear':
@@ -88,14 +92,41 @@ export const TerminalApp: React.FC = () => {
           output = currentDir;
           break;
 
+        case 'echo':
+          output = args.slice(1).join(' ');
+          break;
+
+        case 'whoami':
+          output = `${username} (EVAH Master User, UID: 1000, GID: 1000)`;
+          break;
+
+        case 'date':
+          output = new Date().toUTCString();
+          break;
+
+        case 'df':
+          output = `Filesystem            Size  Used Avail Use% Mounted on
+/dev/evah_usb_32g     32G   45M   31G   1% /EVAH/data
+tmpfs                 4.0G  8.0M  4.0G   1% /run/evah/vault`;
+          break;
+
+        case 'ps':
+          output = `  PID TTY          TIME CMD
+    1 ?        00:00:01 evah_init
+   12 ?        00:00:00 usb_monitor_daemon
+   24 ?        00:00:00 vault_crypto_worker
+   58 ?        00:00:00 window_compositor
+  104 pts/0    00:00:00 evah_sh`;
+          break;
+
         case 'ls': {
           const target = arg1 ? resolvePath(arg1) : currentDir;
           const items = await storage.listDirectory(target);
           if (items.length === 0) {
-            output = '(empty)';
+            output = '(empty directory)';
           } else {
             output = items
-              .map((i) => `${i.isDirectory ? '[DIR]  ' : '[FILE] '} ${i.name} (${i.sizeBytes} B)`)
+              .map((i) => `${i.isDirectory ? '[DIR] ' : '[FILE]'} ${i.name.padEnd(24)} ${i.sizeBytes} B`)
               .join('\n');
           }
           break;
@@ -118,7 +149,7 @@ export const TerminalApp: React.FC = () => {
               setCurrentDir(resolved);
               output = resolved;
             } else {
-              output = `cd: no such directory: ${arg1}`;
+              output = `cd: no such file or directory: ${arg1}`;
               isError = true;
             }
           }
@@ -143,7 +174,7 @@ export const TerminalApp: React.FC = () => {
           } else {
             const resolved = resolvePath(arg1);
             await storage.createDirectory(resolved);
-            output = `Created directory: ${resolved}`;
+            output = `Directory created: ${resolved}`;
           }
           break;
         }
@@ -155,7 +186,7 @@ export const TerminalApp: React.FC = () => {
           } else {
             const resolved = resolvePath(arg1);
             await storage.writeFile(resolved, '');
-            output = `Created file: ${resolved}`;
+            output = `File created: ${resolved}`;
           }
           break;
         }
@@ -173,60 +204,50 @@ export const TerminalApp: React.FC = () => {
         }
 
         case 'usb': {
-          output = `EVAH USB Device Telemetry:
-  Device:       ${device?.name || 'EVAH_PORTABLE_32GB'}
-  Status:       ${device?.isConnected ? 'CONNECTED' : 'DISCONNECTED'}
+          output = `EVAH USB Hardware Interface:
+  State:        ${device?.isConnected ? 'CONNECTED' : 'DISCONNECTED'}
   Marker:       EVAH_DEVICE (Verified)
+  Device Name:  ${device?.name || 'EVAH_PORTABLE_32GB'}
   Mount Path:   ${device?.mountPath || 'E:\\EVAH'}
-  Data Dir:     ${device?.evahDataDir || 'E:\\EVAH\\data'}
-  Capacity:     32.0 GB
+  Data Root:    ${device?.evahDataDir || 'E:\\EVAH\\data'}
+  Partition:    32.0 GB (FAT32/exFAT)
   Serial:       ${device?.serialNumber || 'EV-8842-SEC-99'}`;
           break;
         }
 
         case 'vault': {
-          output = `EVAH Vault Security Status:
-  State:        ${isVaultUnlocked ? 'UNLOCKED (Decrypted in-memory)' : 'LOCKED (AES-256-GCM Encrypted at rest)'}
-  Key Source:   Argon2id/PBKDF2 Derived
-  Target File:  /EVAH/data/vault/vault.enc
-  Auto-Wipe:    Enabled on USB detachment`;
+          output = `EVAH Memory-Guarded Vault:
+  Status:       ${isVaultUnlocked ? 'DECRYPTED (In-memory volatile RAM cache)' : 'LOCKED (AES-256-GCM authenticated cipher)'}
+  Key Derivation: Argon2id / PBKDF2 (100,000 iterations, SHA-256)
+  File Storage: /EVAH/data/vault/vault.enc
+  Auto-Lock:    Armed on inactivity & USB detach`;
           break;
         }
 
         case 'theme': {
           output = `Active Theme Preset: ${activePresetId}
-CSS Variables Injected: --evah-accent, --evah-bg, --evah-surface, --evah-font-sans`;
-          break;
-        }
-
-        case 'whoami': {
-          output = `${username} (EVAH Master User)`;
-          break;
-        }
-
-        case 'date': {
-          output = new Date().toUTCString();
+Injected Tokens: --evah-bg, --evah-surface, --evah-accent, --evah-window-radius`;
           break;
         }
 
         case 'lock': {
           output = 'Locking EVAH environment...';
-          setTimeout(() => lock('Locked from CLI'), 400);
+          setTimeout(() => lock('Locked from Terminal CLI'), 400);
           break;
         }
 
         case 'panic': {
-          output = 'CRITICAL: EMERGENCY PANIC LOCK ACTIVATED.';
+          output = 'CRITICAL: EMERGENCY PANIC LOCK TRIGGERED. PURGING KEYS.';
           setTimeout(() => panicLock(), 400);
           break;
         }
 
         default:
-          output = `evah: command not found: ${cmd}. Type "help" for options.`;
+          output = `evah: command not found: ${cmd}. Type "help" for a list of commands.`;
           isError = true;
       }
     } catch (err: any) {
-      output = `evah error: ${err.message || 'Execution failed'}`;
+      output = `evah: execution error: ${err.message || 'Command failure'}`;
       isError = true;
     }
 
@@ -265,9 +286,26 @@ CSS Variables Injected: --evah-accent, --evah-bg, --evah-surface, --evah-font-sa
   return (
     <div
       onClick={() => inputRef.current?.focus()}
-      className="flex flex-col h-full w-full bg-[#05080f] text-emerald-400 font-mono text-xs p-4 overflow-y-auto select-text cursor-text"
+      className="flex flex-col h-full w-full bg-[#05080f] text-slate-100 font-mono text-xs select-text overflow-hidden"
     >
-      <div className="flex-1 space-y-2">
+      {/* Top Terminal Info Bar */}
+      <div className="h-7 border-b border-white/10 px-3 flex items-center justify-between text-[11px] text-slate-400 bg-black/40 select-none shrink-0">
+        <div className="flex items-center gap-2">
+          <TerminalIcon className="w-3.5 h-3.5 text-teal-400" />
+          <span>{username}@evah:{currentDir}</span>
+        </div>
+        <button
+          onClick={() => setHistory([])}
+          className="hover:text-white flex items-center gap-1"
+          title="Clear screen"
+        >
+          <Trash2 className="w-3 h-3" />
+          <span>Clear</span>
+        </button>
+      </div>
+
+      {/* Terminal Scrollback Body */}
+      <div className="flex-1 p-4 overflow-y-auto space-y-2 cursor-text">
         {history.map((item, idx) => (
           <div key={idx} className="space-y-1">
             {item.command && (
@@ -276,12 +314,12 @@ CSS Variables Injected: --evah-accent, --evah-bg, --evah-surface, --evah-font-sa
                 <span className="text-slate-500">:</span>
                 <span className="text-sky-400">{currentDir}</span>
                 <span className="text-teal-400">$</span>
-                <span className="text-white">{item.command}</span>
+                <span className="text-white font-medium">{item.command}</span>
               </div>
             )}
             {item.output && (
               <pre
-                className={`whitespace-pre-wrap leading-relaxed ${
+                className={`whitespace-pre-wrap leading-relaxed font-mono ${
                   item.isError ? 'text-rose-400' : 'text-slate-300'
                 }`}
               >
@@ -291,7 +329,7 @@ CSS Variables Injected: --evah-accent, --evah-bg, --evah-surface, --evah-font-sa
           </div>
         ))}
 
-        {/* Active Input Line */}
+        {/* Live Input Prompt */}
         <div className="flex items-center gap-2 text-slate-300 pt-1">
           <span className="text-teal-400 font-bold">{username}@evah</span>
           <span className="text-slate-500">:</span>

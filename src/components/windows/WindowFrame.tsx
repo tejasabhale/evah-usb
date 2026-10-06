@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Minus, Square, Copy, X } from 'lucide-react';
 import { WindowInstance } from '@/types/window';
 import { useWindowStore } from '@/stores/useWindowStore';
 import { useThemeStore } from '@/stores/useThemeStore';
+import { WindowHeader } from './WindowHeader';
 
 interface WindowFrameProps {
   window: WindowInstance;
@@ -20,7 +20,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ window: win, children 
   const resizeStartPos = useRef({ mouseX: 0, mouseY: 0, width: 0, height: 0, x: 0, y: 0 });
   const resizeDirection = useRef<'se' | 'e' | 's' | 'w' | 'n' | 'sw' | 'nw' | 'ne'>('se');
 
-  // Dragging logic
+  // Dragging handler
   const handleTitleBarMouseDown = (e: React.MouseEvent) => {
     if (win.isMaximized) return;
     if ((e.target as HTMLElement).closest('button')) return;
@@ -35,7 +35,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ window: win, children 
     };
   };
 
-  // Resize handler
+  // Resizing handler
   const handleResizeMouseDown = (
     e: React.MouseEvent,
     direction: 'se' | 'e' | 's' | 'w' | 'n' | 'sw' | 'nw' | 'ne'
@@ -64,15 +64,16 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ window: win, children 
         const screenW = typeof window !== 'undefined' ? window.innerWidth : 1920;
         const screenH = typeof window !== 'undefined' ? window.innerHeight : 1080;
 
-        const newX = Math.min(Math.max(-win.bounds.width + 100, dragStartPos.current.winX + dx), screenW - 100);
-        const newY = Math.min(Math.max(32, dragStartPos.current.winY + dy), screenH - 70);
+        // Desktop Safe Area Constraints: 32px topbar, 80px dock
+        const newX = Math.min(Math.max(-win.bounds.width + 120, dragStartPos.current.winX + dx), screenW - 120);
+        const newY = Math.min(Math.max(32, dragStartPos.current.winY + dy), screenH - 84);
 
         updateBounds(win.id, { x: newX, y: newY });
       } else if (isResizing) {
         const dx = e.clientX - resizeStartPos.current.mouseX;
         const dy = e.clientY - resizeStartPos.current.mouseY;
-        const minW = win.minWidth || 420;
-        const minH = win.minHeight || 300;
+        const minW = win.minWidth || 480;
+        const minH = win.minHeight || 340;
 
         let newW = resizeStartPos.current.width;
         let newH = resizeStartPos.current.height;
@@ -98,7 +99,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ window: win, children 
           const possibleH = resizeStartPos.current.height - dy;
           if (possibleH >= minH) {
             newH = possibleH;
-            newY = resizeStartPos.current.y + dy;
+            newY = Math.max(32, resizeStartPos.current.y + dy);
           }
         }
 
@@ -126,10 +127,10 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ window: win, children 
 
   return (
     <motion.div
-      initial={{ scale: 0.94, opacity: 0 }}
+      initial={{ scale: 0.95, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
-      exit={{ scale: 0.94, opacity: 0 }}
-      transition={{ duration: 0.15, ease: 'easeOut' }}
+      exit={{ scale: 0.95, opacity: 0 }}
+      transition={{ duration: 0.16, ease: 'easeOut' }}
       onMouseDown={() => focusWindow(win.id)}
       style={{
         transform: `translate3d(${win.bounds.x}px, ${win.bounds.y}px, 0)`,
@@ -146,70 +147,24 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ window: win, children 
           : 'border-evah-border opacity-95'
       }`}
     >
-      {/* Title Bar */}
-      <div
+      {/* Standardized OS Window Header with Always-Visible Accessible Controls */}
+      <WindowHeader
+        title={win.title}
+        isFocused={win.isFocused}
+        isMaximized={win.isMaximized}
         onMouseDown={handleTitleBarMouseDown}
         onDoubleClick={() => maximizeWindow(win.id)}
-        className={`h-10 px-4 flex items-center justify-between border-b border-evah-border cursor-grab active:cursor-grabbing select-none ${
-          win.isFocused ? 'bg-white/[0.04]' : 'bg-transparent'
-        }`}
-      >
-        {/* Left window control traffic dots */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              closeWindow(win.id);
-            }}
-            className="w-3.5 h-3.5 rounded-full bg-rose-500 hover:bg-rose-600 flex items-center justify-center text-rose-950 transition-colors group"
-            title="Close"
-          >
-            <X className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              minimizeWindow(win.id);
-            }}
-            className="w-3.5 h-3.5 rounded-full bg-amber-400 hover:bg-amber-500 flex items-center justify-center text-amber-950 transition-colors group"
-            title="Minimize"
-          >
-            <Minus className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              maximizeWindow(win.id);
-            }}
-            className="w-3.5 h-3.5 rounded-full bg-emerald-500 hover:bg-emerald-600 flex items-center justify-center text-emerald-950 transition-colors group"
-            title={win.isMaximized ? 'Restore' : 'Maximize'}
-          >
-            {win.isMaximized ? (
-              <Copy className="w-2 h-2 opacity-0 group-hover:opacity-100 transition-opacity" />
-            ) : (
-              <Square className="w-2 h-2 opacity-0 group-hover:opacity-100 transition-opacity" />
-            )}
-          </button>
-        </div>
+        onMinimize={() => minimizeWindow(win.id)}
+        onMaximize={() => maximizeWindow(win.id)}
+        onClose={() => closeWindow(win.id)}
+      />
 
-        {/* Center title */}
-        <div className="flex items-center gap-2 text-xs font-semibold text-evah-text tracking-wide truncate max-w-[60%] pointer-events-none">
-          <span>{win.title}</span>
-        </div>
-
-        {/* Right spacing */}
-        <div className="w-14" />
-      </div>
-
-      {/* Window Body */}
-      <div className="flex-1 min-h-0 overflow-hidden relative bg-transparent text-evah-text">
+      {/* Window Body Container */}
+      <div className="flex-1 min-h-0 overflow-hidden relative bg-transparent text-evah-text flex flex-col">
         {children}
       </div>
 
-      {/* Edge & Corner Resize Handles (when not maximized) */}
+      {/* 8-Directional Edge & Corner Resize Handles (when not maximized) */}
       {!win.isMaximized && (
         <>
           <div
@@ -221,12 +176,28 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ window: win, children 
             className="absolute bottom-0 left-0 w-full h-2 cursor-s-resize"
           />
           <div
+            onMouseDown={(e) => handleResizeMouseDown(e, 'w')}
+            className="absolute top-0 left-0 w-2 h-full cursor-w-resize"
+          />
+          <div
+            onMouseDown={(e) => handleResizeMouseDown(e, 'n')}
+            className="absolute top-0 left-0 w-full h-2 cursor-n-resize"
+          />
+          <div
             onMouseDown={(e) => handleResizeMouseDown(e, 'se')}
             className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize z-20"
           />
           <div
-            onMouseDown={(e) => handleResizeMouseDown(e, 'w')}
-            className="absolute top-0 left-0 w-2 h-full cursor-w-resize"
+            onMouseDown={(e) => handleResizeMouseDown(e, 'sw')}
+            className="absolute bottom-0 left-0 w-4 h-4 cursor-sw-resize z-20"
+          />
+          <div
+            onMouseDown={(e) => handleResizeMouseDown(e, 'ne')}
+            className="absolute top-0 right-0 w-4 h-4 cursor-ne-resize z-20"
+          />
+          <div
+            onMouseDown={(e) => handleResizeMouseDown(e, 'nw')}
+            className="absolute top-0 left-0 w-4 h-4 cursor-nw-resize z-20"
           />
         </>
       )}

@@ -1,34 +1,113 @@
 import React, { useState } from 'react';
 import { 
   Settings, Shield, Volume2, Usb, Keyboard, Info, Palette, 
-  Clock, Lock, Copy, RefreshCw, Check 
+  Clock, Lock, Copy, RefreshCw, Check, AlertTriangle, Monitor, 
+  Eye, Sliders, Globe, HardDrive, RotateCcw, X 
 } from 'lucide-react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useThemeStore } from '@/stores/useThemeStore';
 import { useWindowStore } from '@/stores/useWindowStore';
+import { useShortcutStore } from '@/stores/useShortcutStore';
 import { TtsService } from '@/services/tts/TtsService';
 import { useNotificationStore } from '@/stores/useNotificationStore';
+import { Button } from '@/components/ui/Button';
+import { Toggle, Slider, Select } from '@/components/ui/Toggle';
+import { IconButton } from '@/components/ui/IconButton';
+
+type SettingsSection = 
+  | 'appearance'
+  | 'security'
+  | 'shortcuts'
+  | 'voice'
+  | 'usb'
+  | 'privacy'
+  | 'about';
 
 export const SettingsApp: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<'security' | 'voice' | 'usb' | 'shortcuts' | 'about'>('security');
-  
+  const [activeSection, setActiveSection] = useState<SettingsSection>('appearance');
+
   const settings = useSessionStore((s) => s.settings);
   const updateSettings = useSessionStore((s) => s.updateSettings);
   const device = useSessionStore((s) => s.device);
   const isDevSimulation = useSessionStore((s) => s.isDevSimulation);
   const simulateUsbUnplug = useSessionStore((s) => s.simulateUsbUnplug);
   const simulateUsbPlugIn = useSessionStore((s) => s.simulateUsbPlugIn);
+
+  const { tokens, updateTokens, activePresetId, presets, setPreset } = useThemeStore();
+  const { shortcuts, updateShortcut, resetDefaults, conflictItem } = useShortcutStore();
   const openWindow = useWindowStore((s) => s.openWindow);
   const pushNotification = useNotificationStore((s) => s.pushNotification);
+
+  // Key rebinding state
+  const [rebindingId, setRebindingId] = useState<string | null>(null);
+  const [recordedCombo, setRecordedCombo] = useState<string>('');
+  const [conflictWarning, setConflictWarning] = useState<{ conflictName: string; key: string } | null>(null);
 
   const testVoiceGreeting = () => {
     TtsService.getInstance().playWelcomeGreeting(settings.welcomeVoiceVolume);
   };
 
+  const handleStartRebind = (id: string) => {
+    setRebindingId(id);
+    setRecordedCombo('');
+    setConflictWarning(null);
+  };
+
+  const handleKeyDownRecorder = (e: React.KeyboardEvent) => {
+    e.preventDefault();
+    if (!rebindingId) return;
+
+    if (e.key === 'Escape') {
+      setRebindingId(null);
+      setConflictWarning(null);
+      return;
+    }
+
+    const parts: string[] = [];
+    if (e.ctrlKey) parts.push('Ctrl');
+    if (e.altKey) parts.push('Alt');
+    if (e.shiftKey) parts.push('Shift');
+    if (e.metaKey) parts.push('Cmd');
+
+    const keyName = e.key.toUpperCase();
+    if (!['CONTROL', 'ALT', 'SHIFT', 'META'].includes(keyName)) {
+      parts.push(keyName);
+      const combo = parts.join('+');
+      setRecordedCombo(combo);
+
+      // Check conflict
+      const existingConflict = shortcuts.find(
+        (sc) => sc.id !== rebindingId && sc.currentKey.toLowerCase() === combo.toLowerCase()
+      );
+
+      if (existingConflict) {
+        setConflictWarning({ conflictName: existingConflict.name, key: combo });
+      } else {
+        setConflictWarning(null);
+      }
+    }
+  };
+
+  const handleConfirmRebind = async () => {
+    if (!rebindingId || !recordedCombo) return;
+
+    if (conflictWarning) {
+      // Overwrite/replace conflict
+      const existing = shortcuts.find((sc) => sc.name === conflictWarning.conflictName);
+      if (existing) {
+        await updateShortcut(existing.id, 'Disabled');
+      }
+    }
+
+    await updateShortcut(rebindingId, recordedCombo);
+    setRebindingId(null);
+    setConflictWarning(null);
+  };
+
   return (
-    <div className="flex h-full w-full bg-evah-surface text-evah-text select-none">
+    <div className="flex h-full w-full bg-evah-surface text-evah-text select-none overflow-hidden">
       {/* Settings Navigation Sidebar */}
-      <div className="w-52 border-r border-evah-border bg-black/10 flex flex-col p-3 gap-1 shrink-0">
+      <div className="w-56 border-r border-evah-border bg-black/15 flex flex-col p-3 gap-1 shrink-0 overflow-y-auto">
         <div className="px-2 py-1 mb-2">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-evah-text-muted">
             Preferences
@@ -37,20 +116,23 @@ export const SettingsApp: React.FC = () => {
         </div>
 
         {[
+          { id: 'appearance', label: 'Appearance & UI', icon: Palette },
           { id: 'security', label: 'Security & Auto-Lock', icon: Shield },
-          { id: 'voice', label: 'Welcome Voice & TTS', icon: Volume2 },
-          { id: 'usb', label: 'USB Device & Storage', icon: Usb },
           { id: 'shortcuts', label: 'Keyboard Shortcuts', icon: Keyboard },
-          { id: 'about', label: 'About EVAH', icon: Info },
+          { id: 'voice', label: 'Voice & Pronunciation', icon: Volume2 },
+          { id: 'usb', label: 'USB & Storage', icon: Usb },
+          { id: 'privacy', label: 'Privacy & Sessions', icon: Lock },
+          { id: 'about', label: 'About EVAH OS', icon: Info },
         ].map((item) => {
           const Icon = item.icon;
+          const isActive = activeSection === item.id;
           return (
             <button
               key={item.id}
               onClick={() => setActiveSection(item.id as any)}
               className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-left transition-colors ${
-                activeSection === item.id
-                  ? 'bg-evah-accent-subtle text-evah-accent border border-evah-accent/30'
+                isActive
+                  ? 'bg-evah-accent-subtle text-evah-accent font-semibold border border-evah-accent/20'
                   : 'text-evah-text-secondary hover:text-white hover:bg-white/[0.04]'
               }`}
             >
@@ -61,240 +143,371 @@ export const SettingsApp: React.FC = () => {
         })}
 
         <div className="mt-auto pt-3 border-t border-evah-border">
-          <button
+          <Button
+            variant="subtle"
+            size="sm"
+            className="w-full"
+            icon={<Palette className="w-3.5 h-3.5" />}
             onClick={() => openWindow('themes')}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-evah-accent/15 border border-evah-accent/30 text-evah-accent hover:bg-evah-accent/25 text-xs font-semibold transition-colors"
           >
-            <Palette className="w-4 h-4" />
             Open Theme Studio
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* Main Settings Panel */}
+      {/* Main Settings Content Area */}
       <div className="flex-1 p-6 overflow-y-auto min-w-0">
-        {/* Security Section */}
-        {activeSection === 'security' && (
+        {/* Section 1: Appearance & UI */}
+        {activeSection === 'appearance' && (
           <div className="max-w-xl space-y-6">
             <div>
-              <h3 className="text-base font-bold text-white">Security & Session Policies</h3>
+              <h3 className="text-base font-bold text-white">Appearance & Display</h3>
               <p className="text-xs text-evah-text-secondary mt-0.5">
-                Configure auto-lock timers, clipboard hygiene, and panic responses.
+                Manage global presets, UI scaling, and window ergonomics.
               </p>
             </div>
 
-            <div className="space-y-4">
-              <div className="p-4 rounded-xl border border-evah-border bg-white/[0.02] space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <Clock className="w-4 h-4 text-evah-accent" />
-                    <div>
-                      <h4 className="text-xs font-semibold text-white">Inactivity Auto-Lock</h4>
-                      <p className="text-[11px] text-evah-text-muted">Locks screen when idle</p>
-                    </div>
-                  </div>
-                  <select
-                    value={settings.autoLockMinutes}
-                    onChange={(e) => updateSettings({ autoLockMinutes: parseInt(e.target.value) })}
-                    className="px-3 py-1.5 rounded-lg bg-black/40 border border-evah-border text-xs text-white"
-                  >
-                    <option value={1}>1 Minute</option>
-                    <option value={5}>5 Minutes</option>
-                    <option value={10}>10 Minutes (Default)</option>
-                    <option value={15}>15 Minutes</option>
-                    <option value={30}>30 Minutes</option>
-                    <option value={60}>1 Hour</option>
-                    <option value={0}>Never Auto-Lock</option>
-                  </select>
+            <div className="p-4 rounded-2xl border border-evah-border bg-white/[0.02] space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-white">Theme Preset</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {presets.slice(0, 6).map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => setPreset(p.id)}
+                      className={`p-2 rounded-xl border text-left text-xs transition-colors ${
+                        activePresetId === p.id
+                          ? 'border-evah-accent bg-evah-accent-subtle text-white font-semibold'
+                          : 'border-evah-border text-evah-text-secondary hover:bg-white/[0.03]'
+                      }`}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              <div className="p-4 rounded-xl border border-evah-border bg-white/[0.02] space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <Copy className="w-4 h-4 text-emerald-400" />
-                    <div>
-                      <h4 className="text-xs font-semibold text-white">Clipboard Auto-Clear Timer</h4>
-                      <p className="text-[11px] text-evah-text-muted">Clears copied secrets automatically</p>
-                    </div>
-                  </div>
-                  <select
-                    value={settings.clipboardTimeoutSeconds}
-                    onChange={(e) => updateSettings({ clipboardTimeoutSeconds: parseInt(e.target.value) })}
-                    className="px-3 py-1.5 rounded-lg bg-black/40 border border-evah-border text-xs text-white"
-                  >
-                    <option value={5}>5 Seconds</option>
-                    <option value={10}>10 Seconds</option>
-                    <option value={15}>15 Seconds (Default)</option>
-                    <option value={30}>30 Seconds</option>
-                    <option value={60}>60 Seconds</option>
-                    <option value={0}>Disabled</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl border border-rose-500/20 bg-rose-950/10 space-y-2">
-                <div className="flex items-center gap-2 text-rose-300 font-semibold text-xs">
-                  <Shield className="w-4 h-4" />
-                  <span>Panic Emergency Shortcut</span>
-                </div>
-                <p className="text-[11px] text-slate-300">
-                  Pressing <kbd className="px-1.5 py-0.5 rounded bg-black/50 border border-white/20 font-mono text-[10px] text-teal-300">Ctrl + Shift + L</kbd> at any time instantly purges active keys from memory and locks down the environment.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Voice Section */}
-        {activeSection === 'voice' && (
-          <div className="max-w-xl space-y-6">
-            <div>
-              <h3 className="text-base font-bold text-white">Welcome Voice & TTS</h3>
-              <p className="text-xs text-evah-text-secondary mt-0.5">
-                Offline speech greeting played when system finishes initialization.
-              </p>
-            </div>
-
-            <div className="p-4 rounded-xl border border-evah-border bg-white/[0.02] space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-semibold text-white">Startup Welcome Audio</h4>
-                  <p className="text-[11px] text-evah-text-muted">Plays "Welcome to EVAH." before login</p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={settings.welcomeVoiceEnabled}
-                  onChange={(e) => updateSettings({ welcomeVoiceEnabled: e.target.checked })}
-                  className="w-4 h-4 accent-teal-500 rounded"
+              <div className="pt-2 border-t border-evah-border/60">
+                <Slider
+                  label="Global Text Scaling"
+                  min={0.85}
+                  max={1.30}
+                  step={0.05}
+                  value={tokens.textScale}
+                  formatValue={(v) => `${Math.round(v * 100)}%`}
+                  onChange={(v) => updateTokens({ textScale: v })}
                 />
               </div>
 
               <div className="pt-2 border-t border-evah-border/60">
-                <div className="flex justify-between text-xs mb-1.5">
-                  <span className="text-slate-300">Audio Volume</span>
-                  <span className="font-mono text-evah-accent">{Math.round(settings.welcomeVoiceVolume * 100)}%</span>
-                </div>
-                <input
-                  type="range"
-                  min="0.1"
-                  max="1.0"
-                  step="0.05"
-                  value={settings.welcomeVoiceVolume}
-                  onChange={(e) => updateSettings({ welcomeVoiceVolume: parseFloat(e.target.value) })}
-                  className="w-full accent-teal-500"
+                <Slider
+                  label="Window Corner Radius"
+                  min={6}
+                  max={24}
+                  value={tokens.windowRadius}
+                  formatValue={(v) => `${v}px`}
+                  onChange={(v) => updateTokens({ windowRadius: v })}
                 />
               </div>
 
-              <div className="pt-2 flex justify-end">
-                <button
-                  type="button"
-                  onClick={testVoiceGreeting}
-                  className="px-3.5 py-1.5 rounded-lg bg-evah-accent text-black font-semibold text-xs hover:bg-evah-accent-hover transition-colors"
-                >
-                  Test Welcome Voice
-                </button>
+              <div className="pt-2 border-t border-evah-border/60">
+                <Select
+                  label="Interface Density"
+                  value={tokens.density}
+                  onChange={(e) => updateTokens({ density: e.target.value as any })}
+                  options={[
+                    { value: 'compact', label: 'Compact' },
+                    { value: 'comfortable', label: 'Comfortable (Default)' },
+                    { value: 'spacious', label: 'Spacious' },
+                  ]}
+                />
               </div>
             </div>
           </div>
         )}
 
-        {/* USB Section */}
-        {activeSection === 'usb' && (
+        {/* Section 2: Security & Auto-Lock */}
+        {activeSection === 'security' && (
           <div className="max-w-xl space-y-6">
             <div>
-              <h3 className="text-base font-bold text-white">USB Hardware Telemetry</h3>
+              <h3 className="text-base font-bold text-white">Security Policies</h3>
               <p className="text-xs text-evah-text-secondary mt-0.5">
-                Physical drive presence and mounted filesystem details.
+                Inactivity timers, sensitive clipboard hygiene, and memory lockdown.
               </p>
             </div>
 
-            <div className="p-4 rounded-xl border border-evah-border bg-white/[0.02] space-y-3 font-mono text-xs">
-              <div className="flex justify-between border-b border-evah-border/50 pb-2">
-                <span className="text-evah-text-muted">Status:</span>
-                <span className={device?.isConnected ? 'text-emerald-400 font-semibold' : 'text-rose-400 font-semibold'}>
-                  {device?.isConnected ? 'ONLINE / CONNECTED' : 'DISCONNECTED'}
-                </span>
+            <div className="p-4 rounded-2xl border border-evah-border bg-white/[0.02] space-y-4">
+              <Select
+                label="Inactivity Auto-Lock Timeout"
+                value={settings.autoLockMinutes}
+                onChange={(e) => updateSettings({ autoLockMinutes: parseInt(e.target.value) })}
+                options={[
+                  { value: 1, label: '1 Minute' },
+                  { value: 5, label: '5 Minutes' },
+                  { value: 10, label: '10 Minutes (Default)' },
+                  { value: 15, label: '15 Minutes' },
+                  { value: 30, label: '30 Minutes' },
+                  { value: 60, label: '1 Hour' },
+                  { value: 0, label: 'Disabled (Never auto-lock)' },
+                ]}
+              />
+
+              <div className="pt-2 border-t border-evah-border/60">
+                <Select
+                  label="Sensitive Clipboard Auto-Clear Timeout"
+                  value={settings.clipboardTimeoutSeconds}
+                  onChange={(e) => updateSettings({ clipboardTimeoutSeconds: parseInt(e.target.value) })}
+                  options={[
+                    { value: 5, label: '5 Seconds' },
+                    { value: 10, label: '10 Seconds' },
+                    { value: 15, label: '15 Seconds (Default)' },
+                    { value: 30, label: '30 Seconds' },
+                    { value: 60, label: '60 Seconds' },
+                    { value: 0, label: 'Disabled (Do not auto-clear)' },
+                  ]}
+                />
               </div>
-              <div className="flex justify-between border-b border-evah-border/50 pb-2">
-                <span className="text-evah-text-muted">Device ID:</span>
-                <span className="text-white">{device?.name || 'EVAH_PORTABLE_32GB'}</span>
-              </div>
-              <div className="flex justify-between border-b border-evah-border/50 pb-2">
-                <span className="text-evah-text-muted">Mount Path:</span>
-                <span className="text-white">{device?.mountPath || 'E:\\EVAH'}</span>
-              </div>
-              <div className="flex justify-between border-b border-evah-border/50 pb-2">
-                <span className="text-evah-text-muted">Security Marker:</span>
-                <span className="text-teal-400">EVAH_DEVICE (Verified)</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-evah-text-muted">Serial Number:</span>
-                <span className="text-white">{device?.serialNumber || 'EV-8842-SEC-99'}</span>
+
+              <div className="p-3 rounded-xl border border-rose-500/25 bg-rose-950/20 space-y-1.5">
+                <div className="flex items-center gap-2 text-rose-300 font-semibold text-xs">
+                  <Shield className="w-4 h-4" />
+                  <span>Panic Lockdown Action</span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Triggering Panic Lockdown immediately purges in-memory keys, clears the vault cache, wipes the clipboard, and renders the OS inaccessible.
+                </p>
               </div>
             </div>
+          </div>
+        )}
 
-            {isDevSimulation && (
-              <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-950/20 space-y-3">
-                <h4 className="text-xs font-semibold text-amber-300">
-                  Developer Mode Simulator
-                </h4>
-                <p className="text-[11px] text-slate-300">
-                  Simulate physical hardware events directly in the browser to verify session drop handling:
+        {/* Section 3: Keyboard Shortcuts */}
+        {activeSection === 'shortcuts' && (
+          <div className="max-w-xl space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-white">Keyboard Shortcut Manager</h3>
+                <p className="text-xs text-evah-text-secondary mt-0.5">
+                  Click any key combination to rebind. Conflicts are verified in real time.
                 </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={simulateUsbUnplug}
-                    className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold"
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<RotateCcw className="w-3.5 h-3.5" />}
+                onClick={resetDefaults}
+              >
+                Reset All
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              {shortcuts.map((sc) => {
+                const isRebinding = rebindingId === sc.id;
+                return (
+                  <div
+                    key={sc.id}
+                    className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                      isRebinding
+                        ? 'border-evah-accent bg-evah-accent-subtle shadow-md ring-1 ring-evah-accent'
+                        : 'border-evah-border bg-white/[0.02]'
+                    }`}
                   >
-                    Simulate Disconnecting USB
+                    <div>
+                      <h4 className="text-xs font-semibold text-white">{sc.name}</h4>
+                      <p className="text-[11px] text-evah-text-muted mt-0.5">{sc.description}</p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {isRebinding ? (
+                        <div
+                          tabIndex={0}
+                          onKeyDown={handleKeyDownRecorder}
+                          className="px-3 py-1.5 rounded-lg bg-black border border-evah-accent text-xs font-mono text-teal-300 outline-none animate-pulse cursor-pointer"
+                        >
+                          {recordedCombo || 'Press key combo...'}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleStartRebind(sc.id)}
+                          className="px-2.5 py-1 rounded-lg bg-black/50 border border-white/20 font-mono text-xs text-evah-accent hover:border-evah-accent transition-colors"
+                          title="Click to rebind"
+                        >
+                          {sc.currentKey}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Rebinding Modal / Conflict Notice */}
+            {rebindingId && (
+              <div className="p-4 rounded-xl border border-evah-accent bg-black/60 backdrop-blur-md space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-white">
+                    Rebinding: {shortcuts.find((s) => s.id === rebindingId)?.name}
+                  </span>
+                  <button onClick={() => setRebindingId(null)} className="text-slate-400 hover:text-white">
+                    <X className="w-4 h-4" />
                   </button>
-                  <button
-                    onClick={simulateUsbPlugIn}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
+                </div>
+                <p className="text-xs text-slate-300">
+                  Current combo: <kbd className="px-2 py-0.5 rounded bg-black border border-teal-500/40 text-teal-300 font-mono">{recordedCombo || 'Press keys...'}</kbd>
+                </p>
+
+                {conflictWarning && (
+                  <div className="p-3 rounded-lg bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs">
+                    <div className="font-semibold flex items-center gap-1.5 mb-1">
+                      <AlertTriangle className="w-4 h-4 text-amber-400" />
+                      Shortcut Conflict Detected
+                    </div>
+                    This combination is currently assigned to: <strong>{conflictWarning.conflictName}</strong>.
+                    Saving will replace the existing assignment.
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="ghost" size="sm" onClick={() => setRebindingId(null)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={!recordedCombo}
+                    onClick={handleConfirmRebind}
                   >
-                    Simulate Reconnecting USB
-                  </button>
+                    Save Key Binding
+                  </Button>
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {/* Shortcuts Section */}
-        {activeSection === 'shortcuts' && (
+        {/* Section 4: Voice & Speech */}
+        {activeSection === 'voice' && (
           <div className="max-w-xl space-y-6">
             <div>
-              <h3 className="text-base font-bold text-white">System Keyboard Shortcuts</h3>
+              <h3 className="text-base font-bold text-white">Voice & Speech Synthesis</h3>
               <p className="text-xs text-evah-text-secondary mt-0.5">
-                Global hotkeys for rapid workspace navigation and emergency lockdown.
+                Offline speech greeting with verified phonetic pronunciation ("Ee-vha").
               </p>
             </div>
 
-            <div className="space-y-2">
-              {[
-                { shortcut: 'Ctrl + Shift + L', desc: 'Emergency Panic Lock (Purges active keys & locks)' },
-                { shortcut: 'Ctrl + Shift + F', desc: 'Open Files App' },
-                { shortcut: 'Ctrl + Shift + B', desc: 'Open Web Browser' },
-                { shortcut: 'Ctrl + Shift + V', desc: 'Open Secure Vault' },
-                { shortcut: 'Ctrl + Alt + T', desc: 'Open Terminal' },
-                { shortcut: 'Escape', desc: 'Dismiss active dialogs' },
-              ].map((s) => (
-                <div
-                  key={s.shortcut}
-                  className="flex items-center justify-between p-3 rounded-xl border border-evah-border bg-white/[0.02]"
+            <div className="p-4 rounded-2xl border border-evah-border bg-white/[0.02] space-y-4">
+              <Toggle
+                label="Welcome Speech Greeting"
+                description='Plays "Welcome to Ee-vha." upon startup initialization'
+                checked={settings.welcomeVoiceEnabled}
+                onChange={(c) => updateSettings({ welcomeVoiceEnabled: c })}
+              />
+
+              <div className="pt-2 border-t border-evah-border/60">
+                <Slider
+                  label="Voice Volume"
+                  min={0.1}
+                  max={1.0}
+                  step={0.05}
+                  value={settings.welcomeVoiceVolume}
+                  formatValue={(v) => `${Math.round(v * 100)}%`}
+                  onChange={(v) => updateSettings({ welcomeVoiceVolume: v })}
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={<Volume2 className="w-3.5 h-3.5" />}
+                  onClick={testVoiceGreeting}
                 >
-                  <span className="text-xs text-slate-200">{s.desc}</span>
-                  <kbd className="px-2 py-1 rounded bg-black/60 border border-white/20 font-mono text-xs text-evah-accent">
-                    {s.shortcut}
-                  </kbd>
-                </div>
-              ))}
+                  Test Welcome Voice
+                </Button>
+              </div>
             </div>
           </div>
         )}
 
-        {/* About Section */}
+        {/* Section 5: USB & Storage */}
+        {activeSection === 'usb' && (
+          <div className="max-w-xl space-y-6">
+            <div>
+              <h3 className="text-base font-bold text-white">USB Hardware Telemetry</h3>
+              <p className="text-xs text-evah-text-secondary mt-0.5">
+                Physical drive presence and mounted filesystem partition status.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl border border-evah-border bg-white/[0.02] space-y-3 font-mono text-xs">
+              <div className="flex justify-between border-b border-evah-border/40 pb-2">
+                <span className="text-evah-text-muted">Presence:</span>
+                <span className={device?.isConnected ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+                  {device?.isConnected ? 'ONLINE / CONNECTED' : 'DISCONNECTED'}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-evah-border/40 pb-2">
+                <span className="text-evah-text-muted">Identifier:</span>
+                <span className="text-white">{device?.name || 'EVAH_PORTABLE_32GB'}</span>
+              </div>
+              <div className="flex justify-between border-b border-evah-border/40 pb-2">
+                <span className="text-evah-text-muted">Mount Point:</span>
+                <span className="text-white">{device?.mountPath || 'E:\\EVAH'}</span>
+              </div>
+              <div className="flex justify-between border-b border-evah-border/40 pb-2">
+                <span className="text-evah-text-muted">Security Signature:</span>
+                <span className="text-teal-400">EVAH_DEVICE (Verified)</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-evah-text-muted">Serial Hash:</span>
+                <span className="text-white">{device?.serialNumber || 'EV-8842-SEC-99'}</span>
+              </div>
+            </div>
+
+            {isDevSimulation && (
+              <div className="p-4 rounded-2xl border border-amber-500/30 bg-amber-950/20 space-y-3">
+                <h4 className="text-xs font-semibold text-amber-300">
+                  Developer Mode Simulator
+                </h4>
+                <p className="text-[11px] text-slate-300">
+                  Simulate physical hardware events directly to verify session drop handling:
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="danger" size="sm" onClick={simulateUsbUnplug}>
+                    Simulate Disconnecting USB
+                  </Button>
+                  <Button variant="primary" size="sm" onClick={simulateUsbPlugIn}>
+                    Simulate Reconnecting USB
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Section 6: Privacy */}
+        {activeSection === 'privacy' && (
+          <div className="max-w-xl space-y-6">
+            <div>
+              <h3 className="text-base font-bold text-white">Privacy & Isolation</h3>
+              <p className="text-xs text-evah-text-secondary mt-0.5">
+                Local-first privacy architecture with zero telemetry.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl border border-evah-border bg-white/[0.02] space-y-3 text-xs text-slate-300 leading-relaxed">
+              <p>
+                EVAH does not contain any third-party tracking pixels, cloud analytics, or remote database synchronization.
+              </p>
+              <p>
+                Private browser tabs are held exclusively in volatile RAM and are zeroed immediately upon session lock or USB detachment.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Section 7: About */}
         {activeSection === 'about' && (
           <div className="max-w-xl space-y-6">
             <div>
@@ -304,19 +517,11 @@ export const SettingsApp: React.FC = () => {
               </p>
             </div>
 
-            <div className="p-4 rounded-xl border border-evah-border bg-white/[0.02] space-y-3 text-xs text-slate-300 leading-relaxed">
-              <p>
-                <strong>Version:</strong> 1.0.0 (Production Release)
-              </p>
-              <p>
-                <strong>License:</strong> MIT Open Source • Zero Telemetry
-              </p>
-              <p>
-                <strong>Architecture:</strong> Offline-First Portable Web OS (React + TypeScript + Tailwind + Framer Motion + GSAP + Tauri/Rust Shell)
-              </p>
-              <p>
-                <strong>Cryptographic Primitives:</strong> AES-256-GCM, PBKDF2/Argon2id Key Derivation, SHA-256 Integrity Checks.
-              </p>
+            <div className="p-4 rounded-2xl border border-evah-border bg-white/[0.02] space-y-3 text-xs text-slate-300 leading-relaxed font-mono">
+              <p>Version: 1.0.0 (Production Release)</p>
+              <p>Architecture: x86_64 Portable OS Shell</p>
+              <p>License: MIT Open Source</p>
+              <p>Cryptography: AES-256-GCM, PBKDF2/Argon2id, SHA-256</p>
             </div>
           </div>
         )}

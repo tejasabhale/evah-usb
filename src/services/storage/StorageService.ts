@@ -1,6 +1,7 @@
 import { IStorageAdapter } from './IStorageAdapter';
 import { BrowserStorageAdapter } from './BrowserStorageAdapter';
 import { NativeUSBStorageAdapter } from './NativeUSBStorageAdapter';
+import { NodeHttpStorageAdapter } from './NodeHttpStorageAdapter';
 
 class StorageServiceImpl {
   private adapter: IStorageAdapter;
@@ -13,7 +14,7 @@ class StorageServiceImpl {
     if (isTauri) {
       this.adapter = new NativeUSBStorageAdapter();
     } else {
-      this.adapter = new BrowserStorageAdapter();
+      this.adapter = new NodeHttpStorageAdapter();
     }
   }
 
