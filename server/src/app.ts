@@ -1,5 +1,7 @@
 import express, { Express } from 'express';
 import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
 import { config } from './config';
 import apiRoutes from './routes/api.routes';
 import { errorHandler } from './middleware/error.middleware';
@@ -34,6 +36,21 @@ export async function createApp(): Promise<Express> {
 
   // Mount API endpoints
   app.use('/api', apiRoutes);
+
+  // Serve static frontend assets if built dist exists (Production USB & Live environment)
+  if (fs.existsSync(config.distPath)) {
+    app.use(express.static(config.distPath));
+    // SPA fallback for non-API client routes
+    app.use((req, res, next) => {
+      if (req.method === 'GET' && !req.path.startsWith('/api') && req.path !== '/health') {
+        const indexFile = path.join(config.distPath, 'index.html');
+        if (fs.existsSync(indexFile)) {
+          return res.sendFile(indexFile);
+        }
+      }
+      next();
+    });
+  }
 
   // Global error handler
   app.use(errorHandler);

@@ -1,0 +1,24 @@
+#!/bin/bash
+set -e
+
+echo "[EVAH:Build] Configuring live environment users and permissions..."
+
+# Create standard unprivileged evah user
+if ! id "evah" &>/dev/null; then
+  useradd -m -s /bin/bash -u 1000 -G audio,video,input,plugdev evah
+  echo "evah:evah" | chpasswd
+fi
+
+# Ensure /opt/evah directories and permissions
+mkdir -p /opt/evah/data /home/evah/.config/chromium-kiosk
+chown -R evah:evah /opt/evah /home/evah
+chmod +x /opt/evah/scripts/*.sh || true
+
+# Enable EVAH systemd units
+systemctl enable evah-backend.service
+systemctl enable evah-kiosk.service
+
+# Mask sleep/suspend in kiosk live mode
+systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+
+echo "[EVAH:Build] Hook configuration completed successfully."

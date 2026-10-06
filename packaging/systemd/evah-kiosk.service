@@ -1,0 +1,29 @@
+[Unit]
+Description=EVAH Fullscreen Chromium Kiosk Display
+Documentation=https://github.com/evah-os/evah
+After=evah-backend.service network.target sound.target
+Requires=evah-backend.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=evah
+Group=evah
+PAMName=login
+WorkingDirectory=/home/evah
+Environment=HOME=/home/evah
+Environment=USER=evah
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+ExecStart=/opt/evah/scripts/start-kiosk.sh
+Restart=always
+RestartSec=2
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+
+[Install]
+WantedBy=graphical.target multi-user.target

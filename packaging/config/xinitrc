@@ -1,0 +1,4 @@
+#!/bin/sh
+# EVAH X11 Session Initialization
+exec openbox-session &
+exec /opt/evah/scripts/start-kiosk.sh

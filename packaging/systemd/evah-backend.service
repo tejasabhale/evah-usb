@@ -1,0 +1,30 @@
+[Unit]
+Description=EVAH Node.js Local-First MVC Backend & Application Server
+Documentation=https://github.com/evah-os/evah
+After=network.target local-fs.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=evah
+Group=evah
+WorkingDirectory=/opt/evah
+Environment=NODE_ENV=production
+Environment=PORT=3927
+Environment=HOST=127.0.0.1
+Environment=EVAH_DIST_PATH=/opt/evah/frontend
+Environment=EVAH_STORAGE_PATH=/opt/evah/data
+ExecStart=/usr/bin/node /opt/evah/backend/index.cjs
+Restart=always
+RestartSec=2
+LimitNOFILE=65536
+StandardOutput=journal
+StandardError=journal
+
+# Sandboxing & Security
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/opt/evah/data /tmp
+
+[Install]
+WantedBy=multi-user.target

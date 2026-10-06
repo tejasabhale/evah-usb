@@ -7,6 +7,10 @@ node_modules/
 dist/
 dist-ssr/
 *.local
+.evah_local_data/
+packaging/cache/
+packaging/rootfs/
+packaging/iso/config/includes.chroot/opt/evah/
 
 # Tauri
 src-tauri/target/

@@ -13,10 +13,12 @@ export interface ServerConfig {
   sessionTimeoutMs: number;
   encryptionAlgorithm: string;
   pbkdf2Iterations: number;
+  distPath: string;
 }
 
 const isDev = process.env.NODE_ENV !== 'production';
 const defaultStorageRoot = process.env.EVAH_STORAGE_PATH || path.resolve(process.cwd(), '.evah_local_data');
+const defaultDistPath = process.env.EVAH_DIST_PATH || path.resolve(process.cwd(), 'dist');
 
 export const config: ServerConfig = {
   env: (process.env.NODE_ENV as ServerConfig['env']) || 'development',
@@ -27,8 +29,9 @@ export const config: ServerConfig = {
   vaultFile: path.join(defaultStorageRoot, 'EVAH', 'data', 'vault', 'vault.enc'),
   authFile: path.join(defaultStorageRoot, 'EVAH', 'data', 'sessions', 'auth.json'),
   settingsFile: path.join(defaultStorageRoot, 'EVAH', 'data', 'settings', 'config.json'),
-  corsOrigin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'tauri://localhost'],
+  corsOrigin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3927', 'http://127.0.0.1:3927', 'tauri://localhost'],
   sessionTimeoutMs: 15 * 60 * 1000, // 15 minutes default idle lock
   encryptionAlgorithm: 'aes-256-gcm',
   pbkdf2Iterations: 100000,
+  distPath: defaultDistPath,
 };

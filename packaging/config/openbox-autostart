@@ -1,0 +1,3 @@
+# Openbox autostart for EVAH OS Kiosk
+xset s off -dpms s noblank &
+/opt/evah/scripts/start-kiosk.sh &

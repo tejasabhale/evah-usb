@@ -1,0 +1,44 @@
+# ==============================================================================
+# EVAH OS — Minimal Runtime Package List for Debian Live-Build
+# ==============================================================================
+
+# Core Kernel & System
+linux-image-amd64
+live-boot
+live-config
+live-config-systemd
+systemd
+systemd-sysv
+
+# Display & Minimal X11 Windowing
+xserver-xorg-core
+xserver-xorg-video-all
+xserver-xorg-input-all
+xinit
+openbox
+x11-xserver-utils
+unclutter
+
+# Chromium Fullscreen Kiosk Engine
+chromium
+
+# Node.js Application Runtime
+nodejs
+
+# Audio & Hardware Integration
+alsa-utils
+pulseaudio
+pciutils
+usbutils
+udev
+libnss3
+libasound2
+
+# Networking & Basic Utilities
+ca-certificates
+curl
+wget
+
+# System Fonts
+fonts-dejavu-core
+fonts-liberation2
