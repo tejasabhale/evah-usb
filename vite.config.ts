@@ -15,6 +15,7 @@ export default defineConfig({
     strictPort: true,
   },
   build: {
+    emptyOutDir: false,
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
