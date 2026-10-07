@@ -48,7 +48,7 @@ export const TopBar: React.FC = () => {
   }, []);
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-8 px-3 z-50 flex items-center justify-between bg-evah-topbar/80 backdrop-blur-md border-b border-evah-border text-evah-text select-none text-xs">
+    <header className="h-8 w-full px-3 shrink-0 z-40 flex items-center justify-between bg-evah-topbar/95 backdrop-blur-md border-b border-evah-border text-evah-text select-none text-xs">
       {/* Left: EVAH Apple-style Menu & Active App */}
       <div className="flex items-center gap-3">
         {/* EVAH Menu Trigger */}
@@ -151,21 +151,8 @@ export const TopBar: React.FC = () => {
         )}
       </div>
 
-      {/* Center: System Status / Dev Mode Indicator */}
-      <div className="flex items-center gap-2">
-        {isDevSimulation && (
-          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/40 border border-amber-500/30 text-[10px] font-mono text-amber-300">
-            <span>Dev Mode</span>
-            <button
-              onClick={device?.isConnected ? simulateUsbUnplug : simulateUsbPlugIn}
-              className="underline ml-1 hover:text-white"
-              title="Click to toggle USB simulated connection"
-            >
-              ({device?.isConnected ? 'Unplug USB' : 'Plug In USB'})
-            </button>
-          </div>
-        )}
-      </div>
+      {/* Center: Clean System Area */}
+      <div className="flex items-center gap-2" />
 
       {/* Right: Security, USB Telemetry, Battery, Clock */}
       <div className="flex items-center gap-3">

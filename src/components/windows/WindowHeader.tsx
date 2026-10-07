@@ -64,13 +64,13 @@ export const WindowHeader: React.FC<WindowHeaderProps> = ({
         onMouseDown={onMouseDown}
         onDoubleClick={onDoubleClick}
         onContextMenu={handleContextMenu}
-        className={`h-10 px-3.5 flex items-center justify-between border-b border-evah-border cursor-grab active:cursor-grabbing select-none transition-colors ${
+        className={`h-9 md:h-10 pl-3.5 pr-0 flex items-center justify-between border-b border-evah-border cursor-grab active:cursor-grabbing select-none transition-colors shrink-0 ${
           isFocused ? 'bg-white/[0.04]' : 'bg-transparent opacity-85'
         }`}
       >
         {/* Left: App Identity */}
         <div className="flex items-center gap-2.5 min-w-0 max-w-[70%]">
-          {icon && <span className="shrink-0 text-evah-accent">{icon}</span>}
+          {icon && <span className="shrink-0 flex items-center">{icon}</span>}
           <div className="flex items-center gap-2 truncate">
             <span className="text-xs font-semibold text-white tracking-wide truncate">
               {title}

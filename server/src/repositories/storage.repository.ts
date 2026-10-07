@@ -145,6 +145,13 @@ export class StorageRepository {
     }
   }
 
+  public async rename(oldRelPath: string, newRelPath: string): Promise<void> {
+    const oldFullPath = this.safeResolve(oldRelPath);
+    const newFullPath = this.safeResolve(newRelPath);
+    await fs.mkdir(path.dirname(newFullPath), { recursive: true });
+    await fs.rename(oldFullPath, newFullPath);
+  }
+
   public async listDirectory(relPath: string): Promise<FileItem[]> {
     const fullPath = this.safeResolve(relPath);
     try {

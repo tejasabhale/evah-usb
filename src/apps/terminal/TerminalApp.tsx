@@ -4,6 +4,7 @@ import { StorageService } from '@/services/storage/StorageService';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useThemeStore } from '@/stores/useThemeStore';
 import { useVaultStore } from '@/stores/useVaultStore';
+import { useWindowStore } from '@/stores/useWindowStore';
 import { IconButton } from '@/components/ui/IconButton';
 
 interface HistoryItem {
@@ -75,7 +76,7 @@ export const TerminalApp: React.FC = () => {
   whoami            - Display active authenticated profile
   date              - Display system clock (UTC)
   df                - Display storage partition allocation
-  ps                - Display simulated active process table
+  ps                - Display active process & task table
   usb               - Telemetry & presence state of hardware USB
   vault             - Check AES-256-GCM vault security status
   theme             - Show current theme preset & injected variables
@@ -104,20 +105,42 @@ export const TerminalApp: React.FC = () => {
           output = new Date().toUTCString();
           break;
 
-        case 'df':
-          output = `Filesystem            Size  Used Avail Use% Mounted on
-/dev/evah_usb_32g     32G   45M   31G   1% /EVAH/data
-tmpfs                 4.0G  8.0M  4.0G   1% /run/evah/vault`;
-          break;
+        case 'df': {
+          const stats = await storage.getStats();
+          const usedBytes = Math.max(0, stats.totalSizeBytes - stats.freeSizeBytes);
+          const usedPct = stats.totalSizeBytes > 0 ? Math.round((usedBytes / stats.totalSizeBytes) * 100) : 0;
+          const formatSize = (b: number) => {
+            if (b >= 1024 * 1024 * 1024) return `${(b / (1024 * 1024 * 1024)).toFixed(1)}G`;
+            if (b >= 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(1)}M`;
+            if (b >= 1024) return `${(b / 1024).toFixed(1)}K`;
+            return `${b}B`;
+          };
 
-        case 'ps':
-          output = `  PID TTY          TIME CMD
-    1 ?        00:00:01 evah_init
-   12 ?        00:00:00 usb_monitor_daemon
-   24 ?        00:00:00 vault_crypto_worker
-   58 ?        00:00:00 window_compositor
-  104 pts/0    00:00:00 evah_sh`;
+          const mountPath = device?.mountPath || '/EVAH/data';
+          output = `Filesystem            Size      Used     Avail    Use%  Mounted on
+/dev/evah_usb         ${formatSize(stats.totalSizeBytes).padEnd(9)} ${formatSize(usedBytes).padEnd(8)} ${formatSize(stats.freeSizeBytes).padEnd(8)} ${`${usedPct}%`.padEnd(5)} ${mountPath}
+memory_cache          64.0M     2.4M     61.6M    4%    /run/evah/vault
+Total Files: ${stats.totalFiles} | Total Directories: ${stats.totalDirectories}`;
           break;
+        }
+
+        case 'ps': {
+          const windows = useWindowStore.getState().windows;
+          const activeId = useWindowStore.getState().activeWindowId;
+          const lines = [
+            '  PID  NAME                 STATUS       DETAILS',
+            '    1  evah_compositor      RUNNING      Core Desktop Shell',
+            '    2  usb_agent            RUNNING      Hardware Device Watcher',
+            '    3  auth_daemon          RUNNING      AES-256 Vault / Session Guard',
+          ];
+          windows.forEach((w, index) => {
+            const pid = 100 + index + 1;
+            const status = w.id === activeId ? 'ACTIVE' : w.isMinimized ? 'MINIMIZED' : 'BACKGROUND';
+            lines.push(`  ${String(pid).padEnd(4)} ${(w.appId || 'app').padEnd(20)} ${status.padEnd(12)} ${w.title}`);
+          });
+          output = lines.join('\n');
+          break;
+        }
 
         case 'ls': {
           const target = arg1 ? resolvePath(arg1) : currentDir;

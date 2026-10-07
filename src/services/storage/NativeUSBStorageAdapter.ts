@@ -62,6 +62,10 @@ export class NativeUSBStorageAdapter implements IStorageAdapter {
     return this.invoke<boolean>('fs_exists', { path });
   }
 
+  public async rename(oldPath: string, newPath: string): Promise<void> {
+    await this.invoke('fs_rename', { oldPath, newPath });
+  }
+
   public async getStats(): Promise<FileSystemStats> {
     return this.invoke<FileSystemStats>('fs_get_stats');
   }

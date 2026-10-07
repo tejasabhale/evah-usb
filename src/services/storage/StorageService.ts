@@ -29,6 +29,12 @@ class StorageServiceImpl {
   public async initialize(basePath?: string): Promise<boolean> {
     return this.adapter.initialize(basePath);
   }
+
+  public setAuthToken(token: string | null): void {
+    if (this.adapter instanceof NodeHttpStorageAdapter) {
+      this.adapter.setToken(token);
+    }
+  }
 }
 
 export const StorageService = new StorageServiceImpl();

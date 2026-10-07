@@ -93,16 +93,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onUnlockSuccess }) => 
         className="relative z-10 flex flex-col items-center max-w-xs w-full px-4"
       >
         {/* User Avatar */}
-        <div className="w-20 h-20 rounded-full border-2 border-white/20 bg-gradient-to-tr from-slate-900 to-slate-800 shadow-2xl flex items-center justify-center mb-3 relative overflow-hidden backdrop-blur-md">
+        <div className="w-20 h-20 rounded-full border-2 border-white/20 bg-zinc-800 shadow-2xl flex items-center justify-center mb-3 relative overflow-hidden backdrop-blur-md">
           <div className="text-2xl font-bold text-white tracking-widest uppercase">
             {username.slice(0, 2)}
           </div>
-          <div className="absolute inset-0 border border-white/10 rounded-full" />
         </div>
 
-        <h2 className="text-lg font-semibold text-white drop-shadow mb-4">
-          {user?.fullName || username}
-        </h2>
+        <div className="text-center mb-4">
+          <span className="text-xs text-zinc-400 block mb-0.5">Welcome back</span>
+          <h2 className="text-lg font-semibold text-white drop-shadow">
+            {user?.fullName || username}
+          </h2>
+        </div>
 
         {/* Password Entry */}
         <form onSubmit={handleUnlock} className="w-full space-y-3">
@@ -113,17 +115,25 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onUnlockSuccess }) => 
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter Password"
-              className="w-full pl-4 pr-11 py-2.5 rounded-xl bg-black/40 border border-white/20 text-white placeholder-white/40 text-sm backdrop-blur-xl focus:outline-none focus:border-evah-accent focus:ring-1 focus:ring-evah-accent shadow-inner transition-all"
+              className="w-full pl-4 pr-11 py-2.5 rounded-xl bg-black/50 border border-white/20 text-white placeholder-white/40 text-xs backdrop-blur-xl focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 shadow-inner transition-all"
             />
             <button
               type="submit"
               disabled={isVerifying}
-              className="absolute right-1.5 p-2 rounded-lg bg-white/10 hover:bg-evah-accent text-white hover:text-black transition-colors disabled:opacity-50"
-              title="Unlock EVAH"
+              className="absolute right-1.5 p-2 rounded-lg bg-teal-500 hover:bg-teal-400 text-black transition-colors disabled:opacity-50 cursor-pointer"
+              title="Sign In"
             >
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
+
+          <button
+            type="submit"
+            disabled={isVerifying}
+            className="w-full py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-black text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer shadow-sm"
+          >
+            {isVerifying ? 'Verifying...' : 'Sign In'}
+          </button>
 
           {error && (
             <div className="flex items-center justify-center gap-1.5 text-rose-300 text-xs bg-rose-950/60 border border-rose-500/30 rounded-lg py-1.5 px-3">
@@ -147,12 +157,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onUnlockSuccess }) => 
             <span>Encrypted Session</span>
           </div>
         </div>
-
-        {isDevSimulation && (
-          <div className="text-[11px] text-amber-300/80 font-mono tracking-wide">
-            Development Mode • USB Monitoring Simulated
-          </div>
-        )}
       </div>
     </div>
   );

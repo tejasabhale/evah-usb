@@ -66,4 +66,33 @@ describe('AuthService & Cryptographic Authentication', () => {
     const updated = await auth.getSettings();
     expect(updated.autoLockMinutes).toBe(15);
   });
+
+  it('changes password securely and updates persisted profile', async () => {
+    await auth.createInitialProfile('tejas', 'Tejas', 'OriginalPass123');
+    await auth.authenticate('OriginalPass123');
+
+    // Reject incorrect current password
+    await expect(auth.changePassword('WrongCurrent', 'NewSecret456')).rejects.toThrow('Current password is incorrect');
+
+    // Reject short new password
+    await expect(auth.changePassword('OriginalPass123', '12')).rejects.toThrow('at least 4 characters');
+
+    // Reject identical password
+    await expect(auth.changePassword('OriginalPass123', 'OriginalPass123')).rejects.toThrow('identical');
+
+    // Successful change
+    const ok = await auth.changePassword('OriginalPass123', 'NewSecret456');
+    expect(ok).toBe(true);
+    expect(auth.isKeyUnlocked()).toBe(true);
+
+    // Old password should fail
+    auth.purgeKeys();
+    const oldLogin = await auth.authenticate('OriginalPass123');
+    expect(oldLogin).toBe(false);
+
+    // New password should succeed
+    const newLogin = await auth.authenticate('NewSecret456');
+    expect(newLogin).toBe(true);
+    expect(auth.getCurrentUser()?.username).toBe('tejas');
+  });
 });

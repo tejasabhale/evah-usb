@@ -160,8 +160,41 @@ export class NodeHttpStorageAdapter implements IStorageAdapter {
     }
   }
 
+  public getToken(): string | null {
+    return this.token;
+  }
+
   public async exists(path: string): Promise<boolean> {
+    if (this.isServerHealthy) {
+      try {
+        const res = await fetch(
+          `${this.baseUrl}/api/files/exists?path=${encodeURIComponent(path)}`,
+          { headers: this.getHeaders() }
+        );
+        if (res.ok) {
+          const body = await res.json();
+          return Boolean(body.data?.exists);
+        }
+      } catch {
+        // Fall back below
+      }
+    }
     return this.fallbackAdapter.exists(path);
+  }
+
+  public async rename(oldPath: string, newPath: string): Promise<void> {
+    await this.fallbackAdapter.rename(oldPath, newPath);
+    if (!this.isServerHealthy) return;
+
+    try {
+      await fetch(`${this.baseUrl}/api/files/rename`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ oldPath, newPath }),
+      });
+    } catch {
+      // local fallback already updated
+    }
   }
 
   public async getStats(): Promise<FileSystemStats> {

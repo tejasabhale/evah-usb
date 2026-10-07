@@ -97,38 +97,26 @@ export const LockScreen: React.FC = () => {
           )}
         </div>
 
-        <h2 className="text-xl font-bold tracking-wider text-white">
-          EVAH LOCKED
-        </h2>
+        <div className="text-center">
+          <h2 className="text-lg font-semibold text-white">
+            {user?.fullName || user?.username || 'Tejas'}
+          </h2>
+          <p className="text-xs text-zinc-400 mt-1">
+            {isPanic ? 'Emergency panic lockdown active.' : 'This EVAH session is locked.'}
+          </p>
+        </div>
 
         {isUsbMissing ? (
-          <div className="mt-2 text-xs text-rose-300 space-y-2">
+          <div className="mt-4 text-xs text-rose-300 space-y-2">
             <p className="font-semibold text-rose-200">
-              The EVAH device is no longer connected.
+              The EVAH USB drive is disconnected.
             </p>
-            <p className="text-slate-300/80">
-              Active session invalidated. Reconnect your EVAH USB drive to continue.
+            <p className="text-zinc-400">
+              Active session secured. Reconnect your EVAH USB drive to continue.
             </p>
-
-            {isDevSimulation && (
-              <div className="pt-3">
-                <button
-                  type="button"
-                  onClick={simulateUsbPlugIn}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg transition-colors"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  Simulate Reconnecting USB
-                </button>
-              </div>
-            )}
           </div>
         ) : (
-          <div className="w-full mt-4 space-y-4">
-            <p className="text-xs text-slate-300">
-              {isPanic ? 'Emergency panic lockdown. In-memory keys purged.' : 'Session locked. Enter master password to resume.'}
-            </p>
-
+          <div className="w-full mt-4 space-y-3">
             <form onSubmit={handleUnlock} className="space-y-3">
               <div className="relative flex items-center">
                 <input
@@ -136,17 +124,25 @@ export const LockScreen: React.FC = () => {
                   autoFocus
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Master Password"
-                  className="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/40 text-xs focus:outline-none focus:border-evah-accent"
+                  placeholder="Enter Password"
+                  className="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-black/50 border border-white/20 text-white placeholder-white/40 text-xs focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
                 />
                 <button
                   type="submit"
                   disabled={isVerifying}
-                  className="absolute right-1.5 p-1.5 rounded-lg bg-evah-accent text-black hover:bg-evah-accent-hover transition-colors"
+                  className="absolute right-1.5 p-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-black transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
+
+              <button
+                type="submit"
+                disabled={isVerifying}
+                className="w-full py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-black text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer shadow-sm"
+              >
+                {isVerifying ? 'Unlocking...' : 'Unlock'}
+              </button>
 
               {error && (
                 <div className="text-rose-400 text-xs bg-rose-950/40 border border-rose-500/30 rounded-lg p-1.5">

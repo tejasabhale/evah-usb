@@ -1,9 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { 
+  Folder, Globe, Shield, Settings, Palette, Terminal, FileText, Info 
+} from 'lucide-react';
 import { WindowInstance } from '@/types/window';
 import { useWindowStore } from '@/stores/useWindowStore';
 import { useThemeStore } from '@/stores/useThemeStore';
 import { WindowHeader } from './WindowHeader';
+
+const getAppIcon = (appId: string) => {
+  switch (appId) {
+    case 'files': return <Folder className="w-3.5 h-3.5 text-amber-400" />;
+    case 'browser': return <Globe className="w-3.5 h-3.5 text-sky-400" />;
+    case 'vault': return <Shield className="w-3.5 h-3.5 text-emerald-400" />;
+    case 'settings': return <Settings className="w-3.5 h-3.5 text-slate-300" />;
+    case 'themes': return <Palette className="w-3.5 h-3.5 text-purple-400" />;
+    case 'terminal': return <Terminal className="w-3.5 h-3.5 text-teal-400" />;
+    case 'notes': return <FileText className="w-3.5 h-3.5 text-yellow-300" />;
+    case 'about': return <Info className="w-3.5 h-3.5 text-cyan-400" />;
+    default: return null;
+  }
+};
 
 interface WindowFrameProps {
   window: WindowInstance;
@@ -64,9 +81,9 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ window: win, children 
         const screenW = typeof window !== 'undefined' ? window.innerWidth : 1920;
         const screenH = typeof window !== 'undefined' ? window.innerHeight : 1080;
 
-        // Desktop Safe Area Constraints: 32px topbar, 80px dock
+        // Desktop Workspace Constraints: relative to workspace below TopBar
         const newX = Math.min(Math.max(-win.bounds.width + 120, dragStartPos.current.winX + dx), screenW - 120);
-        const newY = Math.min(Math.max(32, dragStartPos.current.winY + dy), screenH - 84);
+        const newY = Math.min(Math.max(0, dragStartPos.current.winY + dy), screenH - 32 - 84);
 
         updateBounds(win.id, { x: newX, y: newY });
       } else if (isResizing) {
@@ -99,7 +116,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ window: win, children 
           const possibleH = resizeStartPos.current.height - dy;
           if (possibleH >= minH) {
             newH = possibleH;
-            newY = Math.max(32, resizeStartPos.current.y + dy);
+            newY = Math.max(0, resizeStartPos.current.y + dy);
           }
         }
 
@@ -141,7 +158,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ window: win, children 
         backgroundColor: `var(--evah-surface)`,
         backdropFilter: `blur(var(--evah-blur-amount, 20px))`,
       }}
-      className={`fixed top-0 left-0 flex flex-col border shadow-evah-win overflow-hidden transition-shadow select-none ${
+      className={`absolute top-0 left-0 flex flex-col border shadow-evah-win overflow-hidden transition-shadow select-none ${
         win.isFocused
           ? 'border-evah-border-strong ring-1 ring-white/10'
           : 'border-evah-border opacity-95'
@@ -150,6 +167,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ window: win, children 
       {/* Standardized OS Window Header with Always-Visible Accessible Controls */}
       <WindowHeader
         title={win.title}
+        icon={getAppIcon(win.appId)}
         isFocused={win.isFocused}
         isMaximized={win.isMaximized}
         onMouseDown={handleTitleBarMouseDown}

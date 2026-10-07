@@ -57,6 +57,114 @@ export class AuthService {
     }
   }
 
+  public async hasAccount(): Promise<boolean> {
+    return storageRepository.exists(AUTH_FILE);
+  }
+
+  public async getAccountStatus(): Promise<{ hasAccount: boolean; username?: string; displayName?: string }> {
+    const exists = await storageRepository.exists(AUTH_FILE);
+    if (!exists) {
+      return { hasAccount: false };
+    }
+    try {
+      const content = await storageRepository.readFile(AUTH_FILE);
+      const data = JSON.parse(content) as StoredAuthData;
+      return {
+        hasAccount: true,
+        username: data.profile.username,
+        displayName: data.profile.displayName,
+      };
+    } catch {
+      return { hasAccount: false };
+    }
+  }
+
+  public async setupAccount(
+    username: string,
+    displayName: string,
+    password: string
+  ): Promise<{ session: AuthSession; profile: UserProfile }> {
+    if (!usbService.isUsbPresent()) {
+      throw new DeviceNotFoundError('Cannot setup account: EVAH USB device is not present');
+    }
+
+    const { salt, hash } = await encryption.hashPassword(password);
+    const authData: StoredAuthData = {
+      version: 1,
+      salt,
+      hash,
+      iterations: 100000,
+      profile: {
+        id: 'usr_' + Math.random().toString(36).substring(2, 9),
+        username: username.trim(),
+        displayName: displayName.trim() || username.trim(),
+        createdAt: new Date().toISOString(),
+      },
+    };
+
+    await storageRepository.writeFile(AUTH_FILE, JSON.stringify(authData, null, 2));
+    logger.info(`Initialized EVAH credentials for user: ${authData.profile.username}`);
+
+    const token = encryption.generateSecureToken(32);
+    const now = Date.now();
+    const session: AuthSession = {
+      token,
+      userId: authData.profile.id,
+      username: authData.profile.username,
+      displayName: authData.profile.displayName,
+      createdAt: now,
+      expiresAt: now + 24 * 60 * 60 * 1000,
+      lastActivity: now,
+      isUsbBound: true,
+    };
+
+    this.activeSessions.set(token, session);
+    eventBus.emitEvah('session:created', { userId: session.userId });
+
+    return { session, profile: authData.profile };
+  }
+
+  public async changePassword(
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ success: boolean; session: AuthSession }> {
+    if (!usbService.isUsbPresent()) {
+      throw new DeviceNotFoundError('Cannot change password: EVAH USB device is not present');
+    }
+
+    const authData = await this.getStoredAuthData();
+    const isValid = await encryption.verifyPassword(currentPassword, authData.salt, authData.hash);
+
+    if (!isValid) {
+      throw new UnauthorizedError('Current password is incorrect');
+    }
+
+    const { salt: newSalt, hash: newHash } = await encryption.hashPassword(newPassword);
+    authData.salt = newSalt;
+    authData.hash = newHash;
+
+    await storageRepository.writeFile(AUTH_FILE, JSON.stringify(authData, null, 2));
+    logger.info(`Password successfully updated for user: ${authData.profile.username}`);
+
+    // Invalidate prior sessions and issue a fresh session
+    this.activeSessions.clear();
+    const token = encryption.generateSecureToken(32);
+    const now = Date.now();
+    const session: AuthSession = {
+      token,
+      userId: authData.profile.id,
+      username: authData.profile.username,
+      displayName: authData.profile.displayName,
+      createdAt: now,
+      expiresAt: now + 24 * 60 * 60 * 1000,
+      lastActivity: now,
+      isUsbBound: true,
+    };
+
+    this.activeSessions.set(token, session);
+    return { success: true, session };
+  }
+
   public async getStoredAuthData(): Promise<StoredAuthData> {
     await this.ensureAuthInitialized();
     const content = await storageRepository.readFile(AUTH_FILE);

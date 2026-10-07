@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Shield, KeyRound, Key, FileText, Lock, Unlock, Eye, EyeOff, 
   Copy, Plus, Trash2, Edit3, Star, Search, Check, ExternalLink, RefreshCw, X, ShieldAlert, Server 
@@ -13,13 +13,17 @@ import { EmptyState } from '@/components/ui/EmptyState';
 
 export const VaultApp: React.FC = () => {
   const {
+    isConfigured,
     isUnlocked,
     items,
     selectedCategory,
     searchQuery,
     isBusy,
     error,
+    checkConfigured,
+    setup,
     unlock,
+    changePassword,
     lock,
     setCategory,
     setSearchQuery,
@@ -32,7 +36,26 @@ export const VaultApp: React.FC = () => {
   const user = useSessionStore((s) => s.user);
   const lifecycle = useSessionStore((s) => s.lifecycle);
 
+  // Setup state (first boot/open)
+  const [setupPassword, setSetupPassword] = useState('');
+  const [confirmSetupPassword, setConfirmSetupPassword] = useState('');
+  const [setupError, setSetupError] = useState<string | null>(null);
+
+  // Unlock state
   const [unlockPassword, setUnlockPassword] = useState('');
+
+  // Change password modal state
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [curPassword, setCurPassword] = useState('');
+  const [newVaultPassword, setNewVaultPassword] = useState('');
+  const [confirmNewVaultPassword, setConfirmNewVaultPassword] = useState('');
+  const [changePasswordError, setChangePasswordError] = useState<string | null>(null);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  useEffect(() => {
+    checkConfigured();
+  }, [checkConfigured]);
+
   const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -163,18 +186,98 @@ export const VaultApp: React.FC = () => {
     return matchesCat && matchesQuery;
   });
 
-  // State 1: Vault is Locked
+  // State 1: Vault is Locked or Unconfigured
   if (!isUnlocked) {
+    if (!isConfigured) {
+      // First-time Vault Setup Flow
+      return (
+        <div className="flex flex-col items-center justify-center h-full w-full bg-evah-surface p-6 text-center select-none">
+          <div className="w-16 h-16 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400 mb-4 shadow-xl">
+            <Shield className="w-8 h-8" />
+          </div>
+          <h2 className="text-base font-bold text-white tracking-wide">
+            Set Up Vault
+          </h2>
+          <p className="text-xs text-evah-text-muted max-w-sm mt-1 mb-6 leading-relaxed">
+            Create a Vault password to protect your private credentials and encrypted keys on this USB.
+          </p>
+
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setSetupError(null);
+              if (setupPassword.length < 6) {
+                setSetupError('Password must be at least 6 characters.');
+                return;
+              }
+              if (setupPassword !== confirmSetupPassword) {
+                setSetupError('Passwords do not match.');
+                return;
+              }
+              const ok = await setup(setupPassword);
+              if (ok) {
+                setSetupPassword('');
+                setConfirmSetupPassword('');
+              }
+            }}
+            className="w-full max-w-xs space-y-3"
+          >
+            <div className="text-left space-y-1">
+              <label className="text-[11px] font-medium text-zinc-300">Password</label>
+              <input
+                type="password"
+                autoFocus
+                required
+                value={setupPassword}
+                onChange={(e) => setSetupPassword(e.target.value)}
+                placeholder="Create Vault password"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-evah-border text-white text-xs focus:outline-none focus:border-teal-400 transition-colors allow-select"
+              />
+            </div>
+
+            <div className="text-left space-y-1">
+              <label className="text-[11px] font-medium text-zinc-300">Confirm Password</label>
+              <input
+                type="password"
+                required
+                value={confirmSetupPassword}
+                onChange={(e) => setConfirmSetupPassword(e.target.value)}
+                placeholder="Confirm password"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-evah-border text-white text-xs focus:outline-none focus:border-teal-400 transition-colors allow-select"
+              />
+            </div>
+
+            {(setupError || error) && (
+              <p className="text-rose-400 text-xs bg-rose-950/40 p-2 rounded-lg border border-rose-500/20 text-left">
+                {setupError || error}
+              </p>
+            )}
+
+            <Button
+              variant="primary"
+              size="md"
+              className="w-full mt-2"
+              isLoading={isBusy}
+              type="submit"
+            >
+              Create Vault
+            </Button>
+          </form>
+        </div>
+      );
+    }
+
+    // Future Vault Access: Unlock Vault Flow
     return (
       <div className="flex flex-col items-center justify-center h-full w-full bg-evah-surface p-6 text-center select-none">
-        <div className="w-16 h-16 rounded-2xl bg-evah-accent-subtle border border-evah-accent/30 flex items-center justify-center text-evah-accent mb-4 shadow-xl">
+        <div className="w-16 h-16 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400 mb-4 shadow-xl">
           <Lock className="w-8 h-8" />
         </div>
         <h2 className="text-base font-bold text-white tracking-wide">
-          EVAH Secure Vault Locked
+          Unlock Vault
         </h2>
         <p className="text-xs text-evah-text-muted max-w-sm mt-1 mb-6 leading-relaxed">
-          Encrypted at rest with AES-256-GCM. Enter your master password to derive the cryptographic key and decrypt entries into RAM.
+          Enter your Vault password to decrypt your credentials into isolated RAM.
         </p>
 
         <form
@@ -185,17 +288,21 @@ export const VaultApp: React.FC = () => {
           }}
           className="w-full max-w-xs space-y-3"
         >
-          <input
-            type="password"
-            autoFocus
-            value={unlockPassword}
-            onChange={(e) => setUnlockPassword(e.target.value)}
-            placeholder="Enter Master Password"
-            className="w-full px-4 py-2.5 rounded-xl bg-black/40 border border-evah-border text-white text-xs focus:outline-none focus:border-evah-accent transition-colors allow-select"
-          />
+          <div className="text-left space-y-1">
+            <label className="text-[11px] font-medium text-zinc-300">Password</label>
+            <input
+              type="password"
+              autoFocus
+              required
+              value={unlockPassword}
+              onChange={(e) => setUnlockPassword(e.target.value)}
+              placeholder="Enter Vault password"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-evah-border text-white text-xs focus:outline-none focus:border-teal-400 transition-colors allow-select"
+            />
+          </div>
 
           {error && (
-            <p className="text-rose-400 text-xs bg-rose-950/40 p-2 rounded-lg border border-rose-500/20">
+            <p className="text-rose-400 text-xs bg-rose-950/40 p-2 rounded-lg border border-rose-500/20 text-left">
               {error}
             </p>
           )}
@@ -203,11 +310,11 @@ export const VaultApp: React.FC = () => {
           <Button
             variant="primary"
             size="md"
-            className="w-full"
+            className="w-full mt-2"
             isLoading={isBusy}
             type="submit"
           >
-            Decrypt & Unlock Vault
+            Unlock
           </Button>
         </form>
       </div>
@@ -275,14 +382,30 @@ export const VaultApp: React.FC = () => {
             className="max-w-sm flex-1"
           />
 
-          <Button
-            variant="primary"
-            size="sm"
-            icon={<Plus className="w-3.5 h-3.5" />}
-            onClick={handleOpenAdd}
-          >
-            New Secret
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<KeyRound className="w-3.5 h-3.5" />}
+              onClick={() => {
+                setChangePasswordError(null);
+                setCurPassword('');
+                setNewVaultPassword('');
+                setConfirmNewVaultPassword('');
+                setIsChangePasswordOpen(true);
+              }}
+            >
+              Change Password
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Plus className="w-3.5 h-3.5" />}
+              onClick={handleOpenAdd}
+            >
+              New Secret
+            </Button>
+          </div>
         </div>
 
         {/* Content Split: Items List & Detail Inspector */}
@@ -569,6 +692,96 @@ export const VaultApp: React.FC = () => {
                 </Button>
                 <Button variant="primary" size="sm" type="submit">
                   Save to Vault
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Change Vault Password Modal */}
+      {isChangePasswordOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+          <div className="w-full max-w-md bg-zinc-900 border border-white/10 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="text-sm font-bold text-white">Change Vault Password</h3>
+              <IconButton icon={<X className="w-4 h-4" />} label="Close" size="sm" onClick={() => setIsChangePasswordOpen(false)} />
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setChangePasswordError(null);
+                if (newVaultPassword.length < 6) {
+                  setChangePasswordError('New password must be at least 6 characters.');
+                  return;
+                }
+                if (newVaultPassword !== confirmNewVaultPassword) {
+                  setChangePasswordError('New passwords do not match.');
+                  return;
+                }
+                setIsChangingPassword(true);
+                const ok = await changePassword(curPassword, newVaultPassword);
+                setIsChangingPassword(false);
+                if (ok) {
+                  setIsChangePasswordOpen(false);
+                  setCurPassword('');
+                  setNewVaultPassword('');
+                  setConfirmNewVaultPassword('');
+                } else {
+                  setChangePasswordError(useVaultStore.getState().error || 'Failed to change password');
+                }
+              }}
+              className="space-y-3"
+            >
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1">Current Vault Password</label>
+                <input
+                  type="password"
+                  required
+                  value={curPassword}
+                  onChange={(e) => setCurPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-white/10 text-white text-xs focus:outline-none focus:border-teal-500 allow-select"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1">New Password</label>
+                <input
+                  type="password"
+                  required
+                  value={newVaultPassword}
+                  onChange={(e) => setNewVaultPassword(e.target.value)}
+                  placeholder="Enter new password (min 6 chars)"
+                  className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-white/10 text-white text-xs focus:outline-none focus:border-teal-500 allow-select"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1">Confirm New Password</label>
+                <input
+                  type="password"
+                  required
+                  value={confirmNewVaultPassword}
+                  onChange={(e) => setConfirmNewVaultPassword(e.target.value)}
+                  placeholder="Confirm new password"
+                  className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-white/10 text-white text-xs focus:outline-none focus:border-teal-500 allow-select"
+                />
+              </div>
+
+              {changePasswordError && (
+                <p className="text-rose-400 text-xs bg-rose-950/40 p-2 rounded-lg border border-rose-500/20">
+                  {changePasswordError}
+                </p>
+              )}
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
+                <Button variant="ghost" size="sm" type="button" onClick={() => setIsChangePasswordOpen(false)}>
+                  Cancel
+                </Button>
+                <Button variant="primary" size="sm" type="submit" isLoading={isChangingPassword}>
+                  Change Password
                 </Button>
               </div>
             </form>

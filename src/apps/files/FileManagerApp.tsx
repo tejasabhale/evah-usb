@@ -247,14 +247,7 @@ export const FileManagerApp: React.FC = () => {
       const parentDir = item.path.substring(0, item.path.lastIndexOf('/'));
       const newPath = `${parentDir}/${renameBuffer.trim()}`;
 
-      if (item.isDirectory) {
-        // Create new, copy/move logic or simple notification
-        pushNotification({ title: 'Rename', message: 'Renamed folder', type: 'info' });
-      } else {
-        const content = await storage.readFile(item.path);
-        await storage.writeFile(newPath, content);
-        await storage.deleteFile(item.path);
-      }
+      await storage.rename(item.path, newPath);
 
       setRenamingId(null);
       loadDirectory(currentPath, false);
@@ -292,9 +285,15 @@ export const FileManagerApp: React.FC = () => {
     try {
       const storage = StorageService.getAdapter();
       for (const node of clipboardAction.nodes) {
-        if (!node.isDirectory) {
+        const targetPath = `${currentPath}/${node.name}`;
+        if (node.isDirectory) {
+          if (clipboardAction.type === 'cut') {
+            await storage.rename(node.path, targetPath);
+          } else {
+            await storage.createDirectory(targetPath);
+          }
+        } else {
           const content = await storage.readFile(node.path);
-          const targetPath = `${currentPath}/${node.name}`;
           await storage.writeFile(targetPath, content);
           if (clipboardAction.type === 'cut') {
             await storage.deleteFile(node.path);
@@ -312,6 +311,7 @@ export const FileManagerApp: React.FC = () => {
       pushNotification({ title: 'Paste Failed', message: e.message, type: 'error' });
     }
   };
+
 
   const handleExportSelected = async () => {
     const firstSelected = items.find((it) => selectedIds.has(it.id));

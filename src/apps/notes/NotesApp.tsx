@@ -67,11 +67,25 @@ export const NotesApp: React.FC = () => {
     }
   };
 
+  const activeNote = notes.find((n) => n.id === activeNoteId) || null;
+  const contentBufferRef = useRef(contentBuffer);
+  const activeNoteRef = useRef(activeNote);
+  contentBufferRef.current = contentBuffer;
+  activeNoteRef.current = activeNote;
+
   useEffect(() => {
     loadNotes();
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+      if (activeNoteRef.current && contentBufferRef.current !== activeNoteRef.current.content) {
+        StorageService.getAdapter()
+          .writeFile(activeNoteRef.current.path, contentBufferRef.current)
+          .catch((err) => console.warn('Unmount note save error:', err));
+      }
+    };
   }, []);
-
-  const activeNote = notes.find((n) => n.id === activeNoteId) || null;
 
   const handleSelectNote = (note: NoteItem) => {
     setActiveNoteId(note.id);

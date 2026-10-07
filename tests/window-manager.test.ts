@@ -21,9 +21,9 @@ describe('useWindowStore & Desktop Window Manager', () => {
     expect(win.isOpen).toBe(true);
     expect(win.isFocused).toBe(true);
 
-    // Usable top is 32px (topbar), usable bottom is screenH - 84px (dock)
-    expect(win.bounds.y).toBeGreaterThanOrEqual(32);
-    expect(win.bounds.y).toBeLessThan(800 - 84);
+    // Usable workspace is below topbar, usable bottom is screenH - 32 - 76 (dock)
+    expect(win.bounds.y).toBeGreaterThanOrEqual(0);
+    expect(win.bounds.y).toBeLessThan(800 - 32 - 76);
     expect(win.bounds.x).toBeGreaterThanOrEqual(0);
   });
 
@@ -44,21 +44,25 @@ describe('useWindowStore & Desktop Window Manager', () => {
     const store = useWindowStore.getState();
     store.openWindow('vault');
     const win = useWindowStore.getState().windows[0];
-    const initialBounds = { ...win.bounds };
 
-    // Maximize
-    store.maximizeWindow(win.id);
-    const maximized = useWindowStore.getState().windows[0];
-    expect(maximized.isMaximized).toBe(true);
-    expect(maximized.bounds.y).toBe(32); // Topbar offset
-    expect(maximized.bounds.height).toBeLessThan(800); // Above dock
+    // Major applications open full-screen by default
+    expect(win.isMaximized).toBe(true);
+    expect(win.bounds.y).toBe(0); // Top of workspace below system bar
+    expect(win.bounds.height).toBeLessThan(800); // Above dock safe margin
 
-    // Restore
+    // Restore to centered bounds
     store.maximizeWindow(win.id);
     const restored = useWindowStore.getState().windows[0];
     expect(restored.isMaximized).toBe(false);
-    expect(restored.bounds.width).toBe(initialBounds.width);
-    expect(restored.bounds.height).toBe(initialBounds.height);
+    expect(restored.bounds.width).toBe(win.prevBounds!.width);
+    expect(restored.bounds.height).toBe(win.prevBounds!.height);
+    expect(restored.bounds.y).toBeGreaterThanOrEqual(0);
+
+    // Re-maximize back to workspace
+    store.maximizeWindow(win.id);
+    const reMaximized = useWindowStore.getState().windows[0];
+    expect(reMaximized.isMaximized).toBe(true);
+    expect(reMaximized.bounds.y).toBe(0);
   });
 
   it('minimizes and brings next candidate to focus', () => {
@@ -88,7 +92,7 @@ describe('useWindowStore & Desktop Window Manager', () => {
     // Call center
     store.centerWindow(win.id);
     const centered = useWindowStore.getState().windows[0];
-    expect(centered.bounds.y).toBeGreaterThanOrEqual(32);
+    expect(centered.bounds.y).toBeGreaterThanOrEqual(0);
     expect(centered.bounds.x).toBeGreaterThan(0);
   });
 
@@ -102,5 +106,89 @@ describe('useWindowStore & Desktop Window Manager', () => {
     store.closeAllWindows();
     expect(useWindowStore.getState().windows.length).toBe(0);
     expect(useWindowStore.getState().activeWindowId).toBeNull();
+  });
+
+  it('reliably opens and closes each registered application via closeWindow', () => {
+    const apps: Array<'files' | 'browser' | 'vault' | 'settings' | 'notes' | 'terminal' | 'themes' | 'about'> = [
+      'files',
+      'browser',
+      'vault',
+      'settings',
+      'notes',
+      'terminal',
+      'themes',
+      'about',
+    ];
+
+    for (const app of apps) {
+      const store = useWindowStore.getState();
+      // 1. Open app
+      store.openWindow(app);
+      let windows = useWindowStore.getState().windows;
+      expect(windows.length).toBe(1);
+      const opened = windows[0];
+      expect(opened.appId).toBe(app);
+      expect(opened.isOpen).toBe(true);
+
+      // 2. Close app via closeWindow (simulating X button click)
+      store.closeWindow(opened.id);
+      windows = useWindowStore.getState().windows;
+      expect(windows.length).toBe(0);
+      expect(useWindowStore.getState().activeWindowId).toBeNull();
+
+      // 3. Re-open app cleanly after close
+      store.openWindow(app);
+      windows = useWindowStore.getState().windows;
+      expect(windows.length).toBe(1);
+      expect(windows[0].appId).toBe(app);
+
+      // Clean up for next app
+      store.closeWindow(windows[0].id);
+    }
+  });
+
+  it('shifts focus to previous window when active window is closed', () => {
+    const store = useWindowStore.getState();
+    store.openWindow('files');
+    store.openWindow('browser');
+    store.openWindow('terminal');
+
+    const windows = useWindowStore.getState().windows;
+    expect(windows.length).toBe(3);
+    const termWin = windows.find((w) => w.appId === 'terminal')!;
+    const browserWin = windows.find((w) => w.appId === 'browser')!;
+    expect(useWindowStore.getState().activeWindowId).toBe(termWin.id);
+
+    // Close the top active window (terminal)
+    store.closeWindow(termWin.id);
+
+    const remaining = useWindowStore.getState().windows;
+    expect(remaining.length).toBe(2);
+    expect(useWindowStore.getState().activeWindowId).toBe(browserWin.id);
+    const updatedBrowserWin = remaining.find((w) => w.appId === 'browser')!;
+    expect(updatedBrowserWin.isFocused).toBe(true);
+  });
+
+  it('closes properly regardless of whether window is maximized or restored', () => {
+    const store = useWindowStore.getState();
+    // Open maximized
+    store.openWindow('settings');
+    const win = useWindowStore.getState().windows[0];
+    expect(win.isMaximized).toBe(true);
+
+    // Restore to centered bounds
+    store.maximizeWindow(win.id);
+    expect(useWindowStore.getState().windows[0].isMaximized).toBe(false);
+
+    // Close from restored state
+    store.closeWindow(win.id);
+    expect(useWindowStore.getState().windows.length).toBe(0);
+
+    // Reopen and close while maximized
+    store.openWindow('settings');
+    const win2 = useWindowStore.getState().windows[0];
+    expect(win2.isMaximized).toBe(true);
+    store.closeWindow(win2.id);
+    expect(useWindowStore.getState().windows.length).toBe(0);
   });
 });

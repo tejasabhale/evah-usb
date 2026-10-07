@@ -27,6 +27,8 @@ interface SessionState {
   simulateUsbPlugIn: () => void;
   recordActivity: () => void;
   refreshUser: () => void;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
+  finishFirstRun: () => void;
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
@@ -139,5 +141,23 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   refreshUser: () => {
     set({ user: AuthService.getInstance().getCurrentUser() });
+  },
+
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    const ok = await AuthService.getInstance().changePassword(currentPassword, newPassword);
+    if (ok) {
+      set({ user: AuthService.getInstance().getCurrentUser() });
+      useNotificationStore.getState().pushNotification({
+        title: 'Password Changed',
+        message: 'Your account password has been updated securely.',
+        type: 'success',
+      });
+    }
+    return ok;
+  },
+
+  finishFirstRun: () => {
+    set({ isFirstRun: false, user: AuthService.getInstance().getCurrentUser() });
+    SessionManager.getInstance().completeLogin();
   },
 }));

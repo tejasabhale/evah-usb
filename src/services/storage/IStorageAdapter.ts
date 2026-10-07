@@ -10,6 +10,7 @@ export interface IStorageAdapter {
   deleteDirectory(path: string): Promise<void>;
   listDirectory(path: string): Promise<FileNode[]>;
   exists(path: string): Promise<boolean>;
+  rename(oldPath: string, newPath: string): Promise<void>;
   getStats(): Promise<FileSystemStats>;
   exportFile(path: string): Promise<Blob>;
   importFile(targetDir: string, file: File): Promise<FileNode>;

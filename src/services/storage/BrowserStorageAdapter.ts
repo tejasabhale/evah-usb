@@ -245,6 +245,64 @@ export class BrowserStorageAdapter implements IStorageAdapter {
     return this.files.has(path);
   }
 
+  public async rename(oldPath: string, newPath: string): Promise<void> {
+    await this.initialize();
+    const existing = this.files.get(oldPath);
+    if (!existing) {
+      throw new Error(`File or directory not found: ${oldPath}`);
+    }
+
+    const newName = newPath.split('/').pop() || 'untitled';
+    const newExt = newName.includes('.') ? newName.split('.').pop() : undefined;
+    const now = new Date().toISOString();
+
+    if (existing.isDirectory) {
+      // Rename the directory itself and all descendants
+      this.files.delete(oldPath);
+      this.files.set(newPath, {
+        ...existing,
+        id: `dir_${newPath}`,
+        name: newName,
+        path: newPath,
+        updatedAt: now,
+      });
+
+      const prefix = oldPath + '/';
+      const toUpdate: Array<{ oldKey: string; updatedNode: FileNode }> = [];
+      for (const [k, node] of this.files.entries()) {
+        if (k.startsWith(prefix)) {
+          const subSuffix = k.substring(prefix.length);
+          const updatedPath = `${newPath}/${subSuffix}`;
+          toUpdate.push({
+            oldKey: k,
+            updatedNode: {
+              ...node,
+              id: node.isDirectory ? `dir_${updatedPath}` : `file_${updatedPath}`,
+              path: updatedPath,
+              updatedAt: now,
+            },
+          });
+        }
+      }
+      for (const item of toUpdate) {
+        this.files.delete(item.oldKey);
+        this.files.set(item.updatedNode.path, item.updatedNode);
+      }
+    } else {
+      this.files.delete(oldPath);
+      this.files.set(newPath, {
+        ...existing,
+        id: `file_${newPath}`,
+        name: newName,
+        path: newPath,
+        extension: newExt,
+        updatedAt: now,
+      });
+    }
+
+    await this.persist();
+  }
+
   public async getStats(): Promise<FileSystemStats> {
     await this.initialize();
     let totalFiles = 0;

@@ -6,6 +6,7 @@ import { useSessionStore } from './useSessionStore';
 import { useNotificationStore } from './useNotificationStore';
 
 interface VaultStoreState {
+  isConfigured: boolean;
   isUnlocked: boolean;
   items: VaultItem[];
   selectedCategory: VaultCategory | 'all';
@@ -13,7 +14,10 @@ interface VaultStoreState {
   isBusy: boolean;
   error: string | null;
 
+  checkConfigured: () => Promise<boolean>;
+  setup: (password: string) => Promise<boolean>;
   unlock: (customPassword?: string) => Promise<boolean>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
   lock: () => void;
   setCategory: (category: VaultCategory | 'all') => void;
   setSearchQuery: (query: string) => void;
@@ -24,6 +28,7 @@ interface VaultStoreState {
 }
 
 export const useVaultStore = create<VaultStoreState>((set, get) => ({
+  isConfigured: false,
   isUnlocked: false,
   items: [],
   selectedCategory: 'all',
@@ -31,18 +36,57 @@ export const useVaultStore = create<VaultStoreState>((set, get) => ({
   isBusy: false,
   error: null,
 
+  checkConfigured: async () => {
+    try {
+      const configured = await VaultCryptoService.getInstance().isVaultConfigured();
+      set({ isConfigured: configured });
+      return configured;
+    } catch {
+      set({ isConfigured: false });
+      return false;
+    }
+  },
+
+  setup: async (password: string) => {
+    set({ isBusy: true, error: null });
+    try {
+      const data = await VaultCryptoService.getInstance().setupVault(password);
+      set({
+        isConfigured: true,
+        isUnlocked: true,
+        items: data.items,
+        isBusy: false,
+        error: null,
+      });
+      useNotificationStore.getState().pushNotification({
+        title: 'Vault Configured',
+        message: 'Master vault password created and encrypted with AES-256-GCM.',
+        type: 'success',
+      });
+      return true;
+    } catch (e: any) {
+      set({
+        isBusy: false,
+        error: e.message || 'Vault setup failed',
+      });
+      return false;
+    }
+  },
+
   unlock: async (customPassword?: string) => {
     set({ isBusy: true, error: null });
     try {
       const data = await VaultCryptoService.getInstance().unlockVault(customPassword);
       set({
+        isConfigured: true,
         isUnlocked: true,
         items: data.items,
         isBusy: false,
+        error: null,
       });
       useNotificationStore.getState().pushNotification({
-        title: 'Vault Decrypted',
-        message: 'In-memory vault unlocked with AES-256-GCM.',
+        title: 'Vault Unlocked',
+        message: 'In-memory vault decrypted into isolated memory.',
         type: 'success',
       });
       return true;
@@ -52,6 +96,23 @@ export const useVaultStore = create<VaultStoreState>((set, get) => ({
         error: e.message || 'Decryption failed',
         isBusy: false,
       });
+      return false;
+    }
+  },
+
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    set({ isBusy: true, error: null });
+    try {
+      await VaultCryptoService.getInstance().changeVaultPassword(currentPassword, newPassword);
+      set({ isBusy: false, error: null });
+      useNotificationStore.getState().pushNotification({
+        title: 'Vault Password Changed',
+        message: 'Vault re-encrypted with your new master password.',
+        type: 'success',
+      });
+      return true;
+    } catch (e: any) {
+      set({ isBusy: false, error: e.message || 'Failed to change Vault password' });
       return false;
     }
   },

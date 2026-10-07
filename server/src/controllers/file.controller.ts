@@ -64,6 +64,26 @@ export class FileController {
     }
   }
 
+  public async exists(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const filePath = validators.validateFilePath(req.query.path);
+      const exists = await fileService.exists(filePath);
+      sendSuccess(res, { path: filePath, exists });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  public async rename(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { oldPath, newPath } = validators.validateRename(req.body);
+      await fileService.rename(oldPath, newPath);
+      sendSuccess(res, { oldPath, newPath, renamed: true });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   public async getTelemetry(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const telemetry = await fileService.getTelemetry();

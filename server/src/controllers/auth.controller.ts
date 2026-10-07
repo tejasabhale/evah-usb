@@ -4,6 +4,35 @@ import { validators } from '../validators';
 import { sendSuccess } from '../utils/response';
 
 export class AuthController {
+  public async getStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const status = await authService.getAccountStatus();
+      sendSuccess(res, status, 200);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  public async setup(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { username, fullName, password } = validators.validateSetup(req.body);
+      const result = await authService.setupAccount(username, fullName, password);
+      sendSuccess(res, result, 201);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  public async changePassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { currentPassword, newPassword } = validators.validateChangePassword(req.body);
+      const result = await authService.changePassword(currentPassword, newPassword);
+      sendSuccess(res, result, 200);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   public async login(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { password } = validators.validateLogin(req.body);

@@ -40,6 +40,11 @@ export class FileService {
     await storageRepository.deleteDirectory(relPath);
   }
 
+  public async rename(oldRelPath: string, newRelPath: string): Promise<void> {
+    this.ensureUsbMounted();
+    await storageRepository.rename(oldRelPath, newRelPath);
+  }
+
   public async exists(relPath: string): Promise<boolean> {
     this.ensureUsbMounted();
     return storageRepository.exists(relPath);

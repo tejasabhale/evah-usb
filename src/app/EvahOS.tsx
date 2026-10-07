@@ -53,7 +53,7 @@ export const EvahOS: React.FC = () => {
 
       {/* 2. First Run Onboarding Phase */}
       {hasBooted && lifecycle === 'FIRST_RUN' && (
-        <FirstRunWizard onComplete={() => useSessionStore.getState().completeBoot()} />
+        <FirstRunWizard onComplete={() => useSessionStore.getState().finishFirstRun()} />
       )}
 
       {/* 3. OS Login Screen Phase */}
@@ -63,18 +63,21 @@ export const EvahOS: React.FC = () => {
 
       {/* 4. Active Desktop Environment Phase */}
       {hasBooted && lifecycle === 'ACTIVE_SESSION' && (
-        <div className="relative w-full h-full overflow-hidden">
-          {/* Top Bar / Status Area */}
+        <div className="flex flex-col w-full h-full overflow-hidden">
+          {/* EVAH System Bar: Occupies its own top layout space */}
           <TopBar />
 
-          {/* Desktop Canvas */}
-          <Desktop />
+          {/* Application Workspace Area: Occupies all remaining viewport height */}
+          <div id="evah-workspace" className="relative flex-1 min-h-0 w-full overflow-hidden">
+            {/* Desktop Canvas */}
+            <Desktop />
 
-          {/* Window Manager Layer */}
-          <WindowManager />
+            {/* Window Manager Layer */}
+            <WindowManager />
 
-          {/* Bottom-Center Floating Taskbar / Dock */}
-          <Dock />
+            {/* Bottom-Center Floating Taskbar / Dock */}
+            <Dock />
+          </div>
         </div>
       )}
 

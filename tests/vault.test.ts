@@ -13,6 +13,7 @@ describe('VaultCryptoService & AES-256-GCM Encryption', () => {
     const storage = StorageService.getAdapter();
     try {
       await storage.deleteFile('/EVAH/data/vault/vault.enc');
+      await storage.deleteFile('/EVAH/data/vault/vault_config.json');
       await storage.deleteFile('/EVAH/data/settings/user.json');
     } catch {
       // ignore if doesn't exist
@@ -119,4 +120,74 @@ describe('VaultCryptoService & AES-256-GCM Encryption', () => {
 
     await expect(vault.unlockVault()).rejects.toThrow();
   });
+
+  describe('Dedicated Vault Master Password & Persistence Lifecycle', () => {
+    it('reports not configured initially and requires 6+ chars to setup', async () => {
+      const isConfiguredInitial = await vault.isVaultConfigured();
+      expect(isConfiguredInitial).toBe(false);
+
+      await expect(vault.setupVault('short')).rejects.toThrow(/at least 6 characters/i);
+    });
+
+    it('sets up dedicated vault password and unlocks with correct credentials', async () => {
+      const initialData = await vault.setupVault('MyVaultSecret123!');
+      expect(initialData).toBeDefined();
+      expect(initialData.items.length).toBeGreaterThan(0);
+      expect(await vault.isVaultConfigured()).toBe(true);
+      expect(vault.isVaultUnlocked()).toBe(true);
+
+      // Lock vault
+      vault.lockVault();
+      expect(vault.isVaultUnlocked()).toBe(false);
+
+      // Attempt unlocking with wrong password
+      await expect(vault.unlockVault('WrongSecretPass')).rejects.toThrow(/incorrect/i);
+      expect(vault.isVaultUnlocked()).toBe(false);
+
+      // Attempt unlocking with correct password
+      const unlockedData = await vault.unlockVault('MyVaultSecret123!');
+      expect(vault.isVaultUnlocked()).toBe(true);
+      expect(unlockedData.items.length).toBe(initialData.items.length);
+    });
+
+    it('changes vault password and re-encrypts stored secrets', async () => {
+      await vault.setupVault('OldPassword123!');
+
+      // Add a secret under the old password
+      const secret = await vault.addItem({
+        title: 'Sensitive Production Key',
+        category: 'developer',
+        password: 'prod-super-secret-key-99',
+        isFavorite: true,
+        customFields: [],
+      });
+
+      // Attempt change with wrong current password
+      await expect(
+        vault.changeVaultPassword('IncorrectOldPass', 'NewPassword456!')
+      ).rejects.toThrow(/incorrect/i);
+
+      // Attempt change with short new password
+      await expect(
+        vault.changeVaultPassword('OldPassword123!', '123')
+      ).rejects.toThrow(/at least 6 characters/i);
+
+      // Successfully change password
+      await vault.changeVaultPassword('OldPassword123!', 'NewPassword456!');
+
+      // Lock vault
+      vault.lockVault();
+
+      // Old password should now fail
+      await expect(vault.unlockVault('OldPassword123!')).rejects.toThrow(/incorrect/i);
+
+      // New password should succeed and retain the added secret
+      const unlocked = await vault.unlockVault('NewPassword456!');
+      expect(unlocked).toBeDefined();
+      const found = unlocked.items.find((i) => i.id === secret.id);
+      expect(found).toBeDefined();
+      expect(found?.password).toBe('prod-super-secret-key-99');
+    });
+  });
 });
+

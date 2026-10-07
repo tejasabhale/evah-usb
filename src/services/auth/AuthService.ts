@@ -35,11 +35,34 @@ export class AuthService {
   }
 
   /**
+   * Loads existing user profile without verifying password.
+   */
+  public async loadStoredProfile(): Promise<UserProfile | null> {
+    try {
+      const storage = StorageService.getAdapter();
+      if (await storage.exists(USER_CONFIG_PATH)) {
+        const raw = await storage.readFile(USER_CONFIG_PATH);
+        const user: UserProfile = JSON.parse(raw);
+        this.currentUser = user;
+        return user;
+      }
+    } catch (e) {
+      console.warn('Failed loading stored profile', e);
+    }
+    return null;
+  }
+
+  /**
    * Checks if user profile exists on EVAH filesystem.
    */
   public async hasExistingProfile(): Promise<boolean> {
     const storage = StorageService.getAdapter();
-    return storage.exists(USER_CONFIG_PATH);
+    const exists = await storage.exists(USER_CONFIG_PATH);
+    if (exists) {
+      await this.loadStoredProfile();
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -80,6 +103,24 @@ export class AuthService {
 
     this.currentUser = user;
     this.masterCryptoKey = derived.key;
+
+    // Synchronize with local backend if present
+    try {
+      const res = await fetch('http://127.0.0.1:3927/api/auth/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user.username, fullName: user.fullName, password }),
+      });
+      if (res.ok) {
+        const body = await res.json();
+        if (body.data?.session?.token) {
+          StorageService.setAuthToken(body.data.session.token);
+        }
+      }
+    } catch {
+      // Local storage active
+    }
+
     return user;
   }
 
@@ -105,6 +146,88 @@ export class AuthService {
 
     this.currentUser = user;
     this.masterCryptoKey = derived.key;
+
+    // Synchronize session token with server if running
+    try {
+      const res = await fetch('http://127.0.0.1:3927/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user.username, password }),
+      });
+      if (res.ok) {
+        const body = await res.json();
+        if (body.data?.session?.token) {
+          StorageService.setAuthToken(body.data.session.token);
+        }
+      }
+    } catch {
+      // Offline mode
+    }
+
+    return true;
+  }
+
+  /**
+   * Safely changes password from Settings, re-deriving master key and updating persisted storage.
+   */
+  public async changePassword(currentPassword: string, newPassword: string): Promise<boolean> {
+    if (!currentPassword) {
+      throw new Error('Current password is required.');
+    }
+    if (!newPassword || newPassword.length < 4) {
+      throw new Error('New password must be at least 4 characters long.');
+    }
+    if (currentPassword === newPassword) {
+      throw new Error('New password cannot be identical to current password.');
+    }
+
+    const storage = StorageService.getAdapter();
+    if (!(await storage.exists(USER_CONFIG_PATH))) {
+      throw new Error('No user profile found.');
+    }
+
+    const raw = await storage.readFile(USER_CONFIG_PATH);
+    const user: UserProfile = JSON.parse(raw);
+    const saltBytes = this.hexToBytes(user.passwordSalt);
+
+    const derivedOld = await this.deriveKeyFromPassword(currentPassword, saltBytes);
+    const currentHash = await this.hashKeyForStorage(derivedOld.key);
+
+    if (currentHash !== user.passwordHash) {
+      throw new Error('Current password is incorrect.');
+    }
+
+    // Generate new salt and master key
+    const newSaltArray = window.crypto.getRandomValues(new Uint8Array(16));
+    const newSaltHex = Array.from(newSaltArray).map(b => b.toString(16).padStart(2, '0')).join('');
+    const derivedNew = await this.deriveKeyFromPassword(newPassword, newSaltArray);
+    const newHashHex = await this.hashKeyForStorage(derivedNew.key);
+
+    user.passwordSalt = newSaltHex;
+    user.passwordHash = newHashHex;
+
+    await storage.writeFile(USER_CONFIG_PATH, JSON.stringify(user, null, 2));
+
+    this.currentUser = user;
+    this.masterCryptoKey = derivedNew.key;
+
+    // Update backend credentials if available
+    try {
+      const res = await fetch('http://127.0.0.1:3927/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      if (res.ok) {
+        const body = await res.json();
+        if (body.data?.session?.token) {
+          StorageService.setAuthToken(body.data.session.token);
+        }
+      }
+    } catch {
+      // Offline mode
+    }
+
     return true;
   }
 
