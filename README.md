@@ -82,7 +82,7 @@ Traditional cloud workstations depend on external servers, continuous network ac
 ### 1. Clone & Install Dependencies
 
 ```bash
-git clone https://github.com/your-username/evah.git
+git clone https://github.com/tejasabhale/evah-usb.git
 cd evah
 npm install
 ```
